@@ -7,7 +7,6 @@ datasource db {
   provider = "mysql"
 }
 
-
 enum UserStatus {
   ACTIVE
   INACTIVE
@@ -16,23 +15,26 @@ enum UserStatus {
 }
 
 model User {
-  id                      BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
-  uuid                    String   @unique @db.Char(36)
-  email                   String   @unique @db.VarChar(255)
-  phone                   String?  @unique @db.VarChar(20)
-  passwordHash            String   @map("password_hash") @db.VarChar(255)
-  status                  UserStatus @default(PENDING)
-  emailVerified           Boolean  @default(false) @map("email_verified")
-  phoneVerified           Boolean  @default(false) @map("phone_verified")
-  lastLoginAt             DateTime? @map("last_login_at")
-  lastPasswordChangedAt   DateTime? @map("last_password_changed_at")
-  createdAt               DateTime  @default(now()) @map("created_at")
-  updatedAt               DateTime  @updatedAt @map("updated_at")
-  deletedAt               DateTime? @map("deleted_at")
-  createdBy               BigInt?   @map("created_by") @db.UnsignedBigInt
-  updatedBy               BigInt?   @map("updated_by") @db.UnsignedBigInt
-  deletedBy               BigInt?   @map("deleted_by") @db.UnsignedBigInt
-  profile                 UserProfile?
+  id                    BigInt              @id @default(autoincrement()) @db.UnsignedBigInt
+  uuid                  String              @unique @db.Char(36)
+  email                 String              @unique @db.VarChar(255)
+  phone                 String?             @unique @db.VarChar(20)
+  passwordHash          String?             @map("password_hash") @db.VarChar(255)
+  status                UserStatus          @default(PENDING)
+  emailVerified         Boolean             @default(false) @map("email_verified")
+  phoneVerified         Boolean             @default(false) @map("phone_verified")
+  lastLoginAt           DateTime?           @map("last_login_at")
+  lastPasswordChangedAt DateTime?           @map("last_password_changed_at")
+  createdAt             DateTime            @default(now()) @map("created_at")
+  updatedAt             DateTime            @updatedAt @map("updated_at")
+  deletedAt             DateTime?           @map("deleted_at")
+  createdBy             BigInt?             @map("created_by") @db.UnsignedBigInt
+  updatedBy             BigInt?             @map("updated_by") @db.UnsignedBigInt
+  deletedBy             BigInt?             @map("deleted_by") @db.UnsignedBigInt
+  profile               UserProfile?
+  productAccesses       UserProductAccess[]
+  oauthAccounts         UserOAuthAccount[]
+  roles                 UserRoleLink[]
 
   @@map("users")
 }
@@ -45,23 +47,133 @@ enum Gender {
 }
 
 model UserProfile {
-  id              BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
-  userId          BigInt   @unique @map("user_id") @db.UnsignedBigInt
-  firstName       String   @map("first_name") @db.VarChar(100)
-  middleName      String?  @map("middle_name") @db.VarChar(100)
-  lastName        String   @map("last_name") @db.VarChar(100)
-  displayName     String?  @map("display_name") @db.VarChar(150)
-  avatarUrl       String?  @map("avatar_url") @db.VarChar(500)
-  coverImageUrl   String?  @map("cover_image_url") @db.VarChar(500)
-  gender          Gender?
-  dateOfBirth     DateTime? @map("date_of_birth") @db.Date
-  timezone        String   @default("Asia/Kolkata") @db.VarChar(100)
-  language        String   @default("en") @db.VarChar(20)
-  countryCode     String?  @map("country_code") @db.Char(2)
-  bio             String?  @db.Text
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
-  deletedAt       DateTime? @map("deleted_at")
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id            BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  userId        BigInt    @unique @map("user_id") @db.UnsignedBigInt
+  firstName     String    @map("first_name") @db.VarChar(100)
+  middleName    String?   @map("middle_name") @db.VarChar(100)
+  lastName      String    @map("last_name") @db.VarChar(100)
+  displayName   String?   @map("display_name") @db.VarChar(150)
+  avatarUrl     String?   @map("avatar_url") @db.VarChar(500)
+  coverImageUrl String?   @map("cover_image_url") @db.VarChar(500)
+  gender        Gender?
+  dateOfBirth   DateTime? @map("date_of_birth") @db.Date
+  timezone      String    @default("Asia/Kolkata") @db.VarChar(100)
+  language      String    @default("en") @db.VarChar(20)
+  countryCode   String?   @map("country_code") @db.Char(2)
+  bio           String?   @db.Text
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  deletedAt     DateTime? @map("deleted_at")
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@map("user_profiles")
+}
+
+enum OAuthProvider {
+  GOOGLE
+  APPLE
+}
+
+model UserOAuthAccount {
+  id                BigInt        @id @default(autoincrement()) @db.UnsignedBigInt
+  uuid              String        @unique @db.Char(36)
+  userId            BigInt        @map("user_id") @db.UnsignedBigInt
+  user              User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider          OAuthProvider
+  providerAccountId String        @map("provider_account_id") @db.VarChar(255)
+  email             String?       @db.VarChar(255)
+  createdAt         DateTime      @default(now()) @map("created_at")
+  updatedAt         DateTime      @updatedAt @map("updated_at")
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+  @@map("user_oauth_accounts")
+}
+
+model Role {
+  id          BigInt           @id @default(autoincrement()) @db.UnsignedBigInt
+  uuid        String           @unique @db.Char(36)
+  code        String           @unique @db.VarChar(100)
+  name        String           @db.VarChar(255)
+  description String?          @db.Text
+  isSystem    Boolean          @default(false) @map("is_system")
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+  permissions RolePermission[]
+  userLinks   UserRoleLink[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id          BigInt           @id @default(autoincrement()) @db.UnsignedBigInt
+  uuid        String           @unique @db.Char(36)
+  code        String           @unique @db.VarChar(100)
+  module      String           @db.VarChar(100)
+  name        String           @db.VarChar(255)
+  description String?          @db.Text
+  createdAt   DateTime         @default(now()) @map("created_at")
+  roles       RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       BigInt     @map("role_id") @db.UnsignedBigInt
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permissionId BigInt     @map("permission_id") @db.UnsignedBigInt
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model UserRoleLink {
+  userId BigInt @map("user_id") @db.UnsignedBigInt
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roleId BigInt @map("role_id") @db.UnsignedBigInt
+  role   Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@map("user_role_links")
+}
+
+enum ProductAccessStatus {
+  ACTIVE
+  SUSPENDED
+  EXPIRED
+  REVOKED
+}
+
+model Product {
+  id           BigInt              @id @default(autoincrement()) @db.UnsignedBigInt
+  uuid         String              @unique @db.Char(36)
+  code         String              @unique @db.VarChar(100)
+  name         String              @db.VarChar(255)
+  description  String?             @db.Text
+  isActive     Boolean             @default(true) @map("is_active")
+  createdAt    DateTime            @default(now()) @map("created_at")
+  updatedAt    DateTime            @updatedAt @map("updated_at")
+  userAccesses UserProductAccess[]
+
+  @@map("products")
+}
+
+model UserProductAccess {
+  id        BigInt              @id @default(autoincrement()) @db.UnsignedBigInt
+  uuid      String              @unique @db.Char(36)
+  userId    BigInt              @map("user_id") @db.UnsignedBigInt
+  user      User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId BigInt              @map("product_id") @db.UnsignedBigInt
+  product   Product             @relation(fields: [productId], references: [id], onDelete: Cascade)
+  status    ProductAccessStatus @default(ACTIVE)
+  grantedAt DateTime            @default(now()) @map("granted_at")
+  expiresAt DateTime?           @map("expires_at")
+  revokedAt DateTime?           @map("revoked_at")
+  createdAt DateTime            @default(now()) @map("created_at")
+  updatedAt DateTime            @updatedAt @map("updated_at")
+
+  @@unique([userId, productId])
+  @@index([userId, status])
+  @@map("user_product_access")
 }

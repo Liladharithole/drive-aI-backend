@@ -5,3 +5,32 @@ generator client {
 datasource db {
   provider = "mysql"
 }
+
+model Folder {
+  id          BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  uuid        String    @unique @db.Char(36)
+  name        String    @db.VarChar(255)
+  color       String?   @default("#4285F4") @db.VarChar(20) // Google Drive folder color hex
+
+  // Logical reference to Central-Core User.uuid
+  userUuid    String    @map("user_uuid") @db.Char(36)
+
+  // Self-Referential Hierarchy (Nested sub-folders inside Product DB)
+  parentId    BigInt?   @map("parent_id") @db.UnsignedBigInt
+  parent      Folder?   @relation("FolderHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children    Folder[]  @relation("FolderHierarchy")
+
+  // Drive Features (Starred, Trashed/Recycle Bin)
+  isStarred   Boolean   @default(false) @map("is_starred")
+  isTrashed   Boolean   @default(false) @map("is_trashed")
+  trashedAt   DateTime? @map("trashed_at")
+
+  // Timestamps
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+
+  @@index([userUuid, parentId])
+  @@index([userUuid, isTrashed])
+  @@map("folders")
+}

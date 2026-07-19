@@ -7,6 +7,7 @@ import {
   HttpStatus,
   Patch,
   Post,
+  Req,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -18,11 +19,13 @@ import {
 import {
   AuthenticatedUser,
   CurrentUser,
-} from '../common/decorators/current-user.decorator';
-import { AuthService } from './auth.service';
+} from '../../common/decorators/current-user.decorator';
+import { AuthService, OAuthUserPayload } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { SignUpDto } from './dto/sign-up.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import { AppleAuthGuard } from './guards/apple-auth.guard';
+import { GoogleAuthGuard } from './guards/google-auth.guard';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 
 @ApiTags('Auth')
@@ -63,6 +66,52 @@ export class AuthController {
     return {
       success: true,
       message: 'Logged in successfully',
+      data: result,
+    };
+  }
+
+  @Get('google')
+  @UseGuards(GoogleAuthGuard)
+  @ApiOperation({ summary: 'Initiate Google OAuth2 Social Login redirect' })
+  async googleAuth() {
+    // Passport automatically redirects user to Google accounts login page
+  }
+
+  @Get('google/callback')
+  @UseGuards(GoogleAuthGuard)
+  @ApiOperation({ summary: 'Google OAuth2 callback handler' })
+  @ApiResponse({
+    status: 200,
+    description: 'Authenticated with Google successfully',
+  })
+  async googleAuthCallback(@Req() req: { user: OAuthUserPayload }) {
+    const result = await this.authService.validateOAuthUser(req.user);
+    return {
+      success: true,
+      message: 'Authenticated with Google successfully',
+      data: result,
+    };
+  }
+
+  @Get('apple')
+  @UseGuards(AppleAuthGuard)
+  @ApiOperation({ summary: 'Initiate Sign in with Apple redirect' })
+  async appleAuth() {
+    // Passport automatically redirects user to Apple ID login page
+  }
+
+  @Get('apple/callback')
+  @UseGuards(AppleAuthGuard)
+  @ApiOperation({ summary: 'Apple OAuth callback handler' })
+  @ApiResponse({
+    status: 200,
+    description: 'Authenticated with Apple successfully',
+  })
+  async appleAuthCallback(@Req() req: { user: OAuthUserPayload }) {
+    const result = await this.authService.validateOAuthUser(req.user);
+    return {
+      success: true,
+      message: 'Authenticated with Apple successfully',
       data: result,
     };
   }
