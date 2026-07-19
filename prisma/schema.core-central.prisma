@@ -6,3 +6,62 @@ generator client {
 datasource db {
   provider = "mysql"
 }
+
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  PENDING
+  BLOCKED
+}
+
+model User {
+  id                      BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  uuid                    String   @unique @db.Char(36)
+  email                   String   @unique @db.VarChar(255)
+  phone                   String?  @unique @db.VarChar(20)
+  passwordHash            String   @map("password_hash") @db.VarChar(255)
+  status                  UserStatus @default(PENDING)
+  emailVerified           Boolean  @default(false) @map("email_verified")
+  phoneVerified           Boolean  @default(false) @map("phone_verified")
+  lastLoginAt             DateTime? @map("last_login_at")
+  lastPasswordChangedAt   DateTime? @map("last_password_changed_at")
+  createdAt               DateTime  @default(now()) @map("created_at")
+  updatedAt               DateTime  @updatedAt @map("updated_at")
+  deletedAt               DateTime? @map("deleted_at")
+  createdBy               BigInt?   @map("created_by") @db.UnsignedBigInt
+  updatedBy               BigInt?   @map("updated_by") @db.UnsignedBigInt
+  deletedBy               BigInt?   @map("deleted_by") @db.UnsignedBigInt
+  profile                 UserProfile?
+
+  @@map("users")
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+  PREFER_NOT_TO_SAY
+}
+
+model UserProfile {
+  id              BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  userId          BigInt   @unique @map("user_id") @db.UnsignedBigInt
+  firstName       String   @map("first_name") @db.VarChar(100)
+  middleName      String?  @map("middle_name") @db.VarChar(100)
+  lastName        String   @map("last_name") @db.VarChar(100)
+  displayName     String?  @map("display_name") @db.VarChar(150)
+  avatarUrl       String?  @map("avatar_url") @db.VarChar(500)
+  coverImageUrl   String?  @map("cover_image_url") @db.VarChar(500)
+  gender          Gender?
+  dateOfBirth     DateTime? @map("date_of_birth") @db.Date
+  timezone        String   @default("Asia/Kolkata") @db.VarChar(100)
+  language        String   @default("en") @db.VarChar(20)
+  countryCode     String?  @map("country_code") @db.Char(2)
+  bio             String?  @db.Text
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  deletedAt       DateTime? @map("deleted_at")
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@map("user_profiles")
+}
