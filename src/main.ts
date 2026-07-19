@@ -5,9 +5,11 @@ process.env.TZ = 'UTC';
 
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { Logger as PinoLogger } from 'nestjs-pino';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
+
 // Function to parse the CORS origins
 function parseCorsOrigins(): string[] {
   const raw = process.env.CORS_ORIGIN;
@@ -36,6 +38,28 @@ async function bootstrap() {
   );
   // Enable shutdown hooks for the app
   app.enableShutdownHooks();
+
+  // Swagger Documentation Setup
+  const swaggerConfig = new DocumentBuilder()
+    .setTitle('FMS Backend API')
+    .setDescription(
+      'Production-Level Financial Ledger & Payment Orchestration Engine API Documentation',
+    )
+    .setVersion('1.0')
+    .addBearerAuth(
+      {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+        name: 'Authorization',
+        description: 'Enter your JWT access token',
+        in: 'header',
+      },
+      'JWT-auth',
+    )
+    .build();
+  const swaggerDocument = SwaggerModule.createDocument(app, swaggerConfig);
+  SwaggerModule.setup('api/docs', app, swaggerDocument);
 
   // CORS configuration
   const corsOrigins = parseCorsOrigins();
@@ -93,6 +117,9 @@ async function bootstrap() {
     );
   }
   bootstrapLogger.log(`Server listening on http://localhost:${port}`);
+  bootstrapLogger.log(
+    `Swagger Documentation available at http://localhost:${port}/api/docs`,
+  );
 }
 
 void bootstrap();
