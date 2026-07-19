@@ -9,7 +9,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
 import { randomUUID } from 'node:crypto';
-import { getUtcDate } from '../common/utils/date.util';
+import { formatDateResponse, getUtcDate } from '../common/utils/date.util';
 import { PrismaCentralCoreService } from '../prisma-central-core/prisma-central-core.service';
 import { LoginDto } from './dto/login.dto';
 import { SignUpDto } from './dto/sign-up.dto';
@@ -54,6 +54,7 @@ export class AuthService {
     // Hash password securely
     const passwordHash = await bcrypt.hash(dto.password, 10);
     const uuid = randomUUID();
+    const userTimezone = dto.timezone || 'Asia/Kolkata';
 
     try {
       // Create User and UserProfile atomically in a transaction
@@ -72,7 +73,7 @@ export class AuthService {
                 middleName: dto.middleName?.trim() || null,
                 displayName: `${dto.firstName.trim()} ${dto.lastName.trim()}`,
                 gender: dto.gender || null,
-                timezone: dto.timezone || 'Asia/Kolkata',
+                timezone: userTimezone,
                 language: dto.language || 'en',
               },
             },
@@ -85,7 +86,7 @@ export class AuthService {
 
       this.logger.log(`User created successfully: ${newUser.uuid}`);
 
-      // Sanitize output (exclude passwordHash, safely convert BigInt to string)
+      // Sanitize output with UTC + Local timezone formatted dates
       return {
         id: newUser.id.toString(),
         uuid: newUser.uuid,
@@ -94,8 +95,8 @@ export class AuthService {
         status: newUser.status,
         emailVerified: newUser.emailVerified,
         phoneVerified: newUser.phoneVerified,
-        createdAt: newUser.createdAt,
-        updatedAt: newUser.updatedAt,
+        createdAt: formatDateResponse(newUser.createdAt, userTimezone),
+        updatedAt: formatDateResponse(newUser.updatedAt, userTimezone),
         profile: newUser.profile
           ? {
               id: newUser.profile.id.toString(),
@@ -151,6 +152,8 @@ export class AuthService {
       data: { lastLoginAt: nowUtc },
     });
 
+    const userTimezone = user.profile?.timezone || 'Asia/Kolkata';
+
     // 4. Generate JWT payload & sign token
     const payload = {
       sub: user.uuid,
@@ -170,7 +173,7 @@ export class AuthService {
         status: user.status,
         displayName: user.profile?.displayName || '',
         avatarUrl: user.profile?.avatarUrl || null,
-        lastLoginAt: nowUtc,
+        lastLoginAt: formatDateResponse(nowUtc, userTimezone),
       },
     };
   }
@@ -188,6 +191,8 @@ export class AuthService {
       throw new NotFoundException('User profile not found');
     }
 
+    const userTimezone = user.profile?.timezone || 'Asia/Kolkata';
+
     return {
       id: user.id.toString(),
       uuid: user.uuid,
@@ -196,9 +201,9 @@ export class AuthService {
       status: user.status,
       emailVerified: user.emailVerified,
       phoneVerified: user.phoneVerified,
-      lastLoginAt: user.lastLoginAt,
-      createdAt: user.createdAt,
-      updatedAt: user.updatedAt,
+      lastLoginAt: formatDateResponse(user.lastLoginAt, userTimezone),
+      createdAt: formatDateResponse(user.createdAt, userTimezone),
+      updatedAt: formatDateResponse(user.updatedAt, userTimezone),
       profile: user.profile
         ? {
             id: user.profile.id.toString(),
@@ -209,7 +214,10 @@ export class AuthService {
             avatarUrl: user.profile.avatarUrl,
             coverImageUrl: user.profile.coverImageUrl,
             gender: user.profile.gender,
-            dateOfBirth: user.profile.dateOfBirth,
+            dateOfBirth: formatDateResponse(
+              user.profile.dateOfBirth,
+              userTimezone,
+            ),
             timezone: user.profile.timezone,
             language: user.profile.language,
             countryCode: user.profile.countryCode,
@@ -338,7 +346,7 @@ export class AuthService {
     return {
       success: true,
       message: 'Account soft-deleted successfully',
-      deletedAt: nowUtc,
+      deletedAt: formatDateResponse(nowUtc),
     };
   }
 }
