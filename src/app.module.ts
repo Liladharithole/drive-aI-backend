@@ -5,6 +5,7 @@ import { AppService } from './app.service';
 import { createPinoHttpOptions } from './logger/pino-http.config';
 import { AdminModule } from './modules/admin/admin.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { DriveModule } from './modules/drive/drive.module';
 import { FilesModule } from './modules/files/files.module';
 import { FoldersModule } from './modules/folders/folders.module';
 import { ProductsModule } from './modules/products/products.module';
@@ -22,6 +23,7 @@ import { PrismaModule } from './prisma/prisma.module';
     ProductsModule,
     FoldersModule,
     FilesModule,
+    DriveModule,
     AdminModule,
   ],
   controllers: [AppController],
