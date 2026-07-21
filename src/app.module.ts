@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { BullModule } from '@nestjs/bullmq';
 import { LoggerModule } from 'nestjs-pino';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -16,6 +17,12 @@ import { PrismaModule } from './prisma/prisma.module';
   imports: [
     LoggerModule.forRoot({
       pinoHttp: createPinoHttpOptions(),
+    }),
+    BullModule.forRoot({
+      connection: {
+        host: process.env.REDIS_HOST || 'localhost',
+        port: parseInt(process.env.REDIS_PORT || '6379', 10),
+      },
     }),
     PrismaModule,
     PrismaCentralCoreModule,

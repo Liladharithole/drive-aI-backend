@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -11,10 +12,11 @@ import {
   Query,
   Res,
   UploadedFile,
+  UploadedFiles,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import {
   ApiBearerAuth,
   ApiBody,
@@ -54,12 +56,10 @@ export class FilesController {
   constructor(private readonly filesService: FilesService) {}
 
   @Post('upload')
-  @HttpCode(HttpStatus.CREATED)
+  @HttpCode(HttpStatus.ACCEPTED)
   @UseInterceptors(FileInterceptor('file'))
   @ApiConsumes('multipart/form-data')
-  @ApiOperation({
-    summary: 'Upload a file (PDF, DOCX, TXT, PNG, CSV) to a folder or root',
-  })
+  @ApiOperation({ summary: 'Queue a file upload job (Asynchronous)' })
   @ApiBody({
     schema: {
       type: 'object',
@@ -69,7 +69,10 @@ export class FilesController {
       },
     },
   })
-  @ApiResponse({ status: 201, description: 'File uploaded successfully' })
+  @ApiResponse({
+    status: 202,
+    description: 'File upload job queued successfully',
+  })
   @ApiResponse({ status: 400, description: 'Empty file or validation error' })
   @ApiResponse({
     status: 409,
@@ -80,7 +83,7 @@ export class FilesController {
     @UploadedFile() file: UploadedMulterFile,
     @Body() dto: UploadFileDto,
   ) {
-    const uploadedFile = await this.filesService.uploadFile(
+    const jobResult = await this.filesService.queueUploadJob(
       user.uuid,
       file.buffer,
       file.originalname,
@@ -90,8 +93,89 @@ export class FilesController {
 
     return {
       success: true,
-      message: 'File uploaded successfully',
-      data: uploadedFile,
+      message: 'File upload job queued successfully',
+      data: jobResult,
+    };
+  }
+
+  @Post('upload/bulk')
+  @HttpCode(HttpStatus.ACCEPTED)
+  @UseInterceptors(FilesInterceptor('files', 20))
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({
+    summary: 'Queue multiple file upload jobs (up to 20 files, Asynchronous)',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        files: {
+          type: 'array',
+          items: { type: 'string', format: 'binary' },
+        },
+        folderUuid: { type: 'string', description: 'Target folder UUID' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 202,
+    description: 'File upload jobs queued successfully',
+  })
+  async uploadFilesBulk(
+    @CurrentUser() user: AuthenticatedUser,
+    @UploadedFiles() files: UploadedMulterFile[],
+    @Body() dto: UploadFileDto,
+  ) {
+    if (!files || files.length === 0) {
+      throw new BadRequestException('No files uploaded');
+    }
+
+    const queuedJobs: any[] = [];
+    const errors: any[] = [];
+
+    for (const file of files) {
+      try {
+        const job = await this.filesService.queueUploadJob(
+          user.uuid,
+          file.buffer,
+          file.originalname,
+          file.mimetype,
+          dto,
+        );
+        queuedJobs.push(job);
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : 'Queueing failed';
+        errors.push({
+          filename: file.originalname,
+          error: errMsg,
+        });
+      }
+    }
+
+    return {
+      success: true,
+      message: `Successfully queued ${queuedJobs.length} jobs. Failed to queue: ${errors.length}.`,
+      data: {
+        queued: queuedJobs,
+        failed: errors,
+      },
+    };
+  }
+
+  @Get('jobs/:jobId')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Check the status of a background file upload job' })
+  @ApiResponse({
+    status: 200,
+    description: 'Job status retrieved successfully',
+  })
+  @ApiResponse({ status: 404, description: 'Job not found' })
+  async getJobStatus(@Param('jobId') jobId: string) {
+    const jobStatus = await this.filesService.getJobStatus(jobId);
+    return {
+      success: true,
+      message: 'Job status retrieved successfully',
+      data: jobStatus,
     };
   }
 

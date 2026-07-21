@@ -1,4 +1,4 @@
-# 📡 Comprehensive API Reference (31 Endpoints)
+# 📡 Comprehensive API Reference (32 Endpoints)
 
 All endpoints are documented interactively via Swagger UI at **`http://localhost:7001/api/docs`**.
 
@@ -61,16 +61,18 @@ All endpoints are documented interactively via Swagger UI at **`http://localhost
 
 ## 📄 5. File Storage & Uploads (`/files`)
 
-| Method   | Endpoint                | Product Entitlement | Description                                       |
-| -------- | ----------------------- | ------------------- | ------------------------------------------------- |
-| `POST`   | `/files/upload`         | `DRIVE_AI`          | Upload file (PDF, DOCX, PNG, CSV, TXT)            |
-| `GET`    | `/files`                | `DRIVE_AI`          | List files inside folder (filter starred/trashed) |
-| `GET`    | `/files/:uuid`          | `DRIVE_AI`          | Get file metadata & formatted size (`2.4 MB`)     |
-| `GET`    | `/files/:uuid/download` | `DRIVE_AI`          | Download or stream physical file Attachment       |
-| `PATCH`  | `/files/:uuid`          | `DRIVE_AI`          | Rename, star/unstar, or move file                 |
-| `PATCH`  | `/files/:uuid/trash`    | `DRIVE_AI`          | Move file to Trash Bin                            |
-| `PATCH`  | `/files/:uuid/restore`  | `DRIVE_AI`          | Restore file from Trash Bin                       |
-| `DELETE` | `/files/:uuid`          | `DRIVE_AI`          | Permanently delete file from storage & DB         |
+| Method   | Endpoint                | Product Entitlement | Description                                             |
+| -------- | ----------------------- | ------------------- | ------------------------------------------------------- |
+| `POST`   | `/files/upload`         | `DRIVE_AI`          | Queue a file upload job (Asynchronous, returns 202)     |
+| `POST`   | `/files/upload/bulk`    | `DRIVE_AI`          | Queue multiple file uploads (Asynchronous, returns 202) |
+| `GET`    | `/files/jobs/:jobId`    | `DRIVE_AI`          | Check status of a background file upload job            |
+| `GET`    | `/files`                | `DRIVE_AI`          | List files inside folder (filter starred/trashed)       |
+| `GET`    | `/files/:uuid`          | `DRIVE_AI`          | Get file metadata & formatted size (`2.4 MB`)           |
+| `GET`    | `/files/:uuid/download` | `DRIVE_AI`          | Download or stream physical file Attachment             |
+| `PATCH`  | `/files/:uuid`          | `DRIVE_AI`          | Rename, star/unstar, or move file                       |
+| `PATCH`  | `/files/:uuid/trash`    | `DRIVE_AI`          | Move file to Trash Bin                                  |
+| `PATCH`  | `/files/:uuid/restore`  | `DRIVE_AI`          | Restore file from Trash Bin                             |
+| `DELETE` | `/files/:uuid`          | `DRIVE_AI`          | Permanently delete file from storage & DB               |
 
 ---
 

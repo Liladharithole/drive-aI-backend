@@ -5,9 +5,13 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { InjectQueue } from '@nestjs/bullmq';
 import { File } from '@prisma/client';
+import { Queue } from 'bullmq';
 import { randomUUID } from 'node:crypto';
-import { extname } from 'node:path';
+import { existsSync, mkdirSync } from 'node:fs';
+import { writeFile } from 'node:fs/promises';
+import { extname, join } from 'node:path';
 import {
   FormattedDateResponse,
   formatDateResponse,
@@ -41,11 +45,17 @@ export interface FormattedFile {
 @Injectable()
 export class FilesService {
   private readonly logger = new Logger(FilesService.name);
+  private readonly tempUploadDir = join(process.cwd(), 'uploads', 'temp');
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly storageService: StorageService,
-  ) {}
+    @InjectQueue('file-upload') private readonly fileUploadQueue: Queue,
+  ) {
+    if (!existsSync(this.tempUploadDir)) {
+      mkdirSync(this.tempUploadDir, { recursive: true });
+    }
+  }
 
   /**
    * Helper to format raw bytes into human-readable size string (e.g., 2.4 MB).
@@ -85,7 +95,114 @@ export class FilesService {
   }
 
   /**
-   * Upload a file and save metadata in database.
+   * Write file to temporary folder and queue a background upload job.
+   */
+  async queueUploadJob(
+    userUuid: string,
+    fileBuffer: Buffer,
+    originalName: string,
+    mimeType: string,
+    dto: UploadFileDto,
+    userTimezone = 'Asia/Kolkata',
+  ) {
+    if (!fileBuffer || fileBuffer.length === 0) {
+      throw new BadRequestException('File content cannot be empty');
+    }
+
+    let targetFolderUuid: string | null = null;
+
+    if (dto.folderUuid) {
+      const folder = await this.prisma.folder.findFirst({
+        where: {
+          uuid: dto.folderUuid,
+          userUuid,
+          isTrashed: false,
+          deletedAt: null,
+        },
+      });
+
+      if (!folder) {
+        throw new NotFoundException('Target folder not found');
+      }
+      targetFolderUuid = folder.uuid;
+    }
+
+    // Check duplicate file name in same folder early
+    const duplicate = await this.prisma.file.findFirst({
+      where: {
+        name: originalName.trim(),
+        userUuid,
+        folderUuid: targetFolderUuid,
+        isTrashed: false,
+        deletedAt: null,
+      },
+    });
+
+    if (duplicate) {
+      throw new ConflictException(
+        'A file with this name already exists in this folder',
+      );
+    }
+
+    // Write file to temp folder
+    const uuid = randomUUID();
+    const safeName = originalName.replace(/[^a-zA-Z0-9.-]/g, '_');
+    const tempFileName = `${uuid}_${safeName}`;
+    const tempPath = join(this.tempUploadDir, tempFileName);
+
+    await writeFile(tempPath, fileBuffer);
+
+    this.logger.log(`Temporary file buffered at: ${tempPath}`);
+
+    // Add job to BullMQ
+    const job = await this.fileUploadQueue.add(
+      'process-file',
+      {
+        tempPath,
+        originalName: originalName.trim(),
+        mimeType,
+        userUuid,
+        folderUuid: targetFolderUuid || undefined,
+        userTimezone,
+      },
+      {
+        attempts: 3,
+        backoff: 5000, // retry after 5 seconds on fail
+      },
+    );
+
+    this.logger.log(`Queued file upload job ${job.id} for: ${originalName}`);
+
+    return {
+      jobId: job.id,
+      status: 'queued',
+      name: originalName.trim(),
+    };
+  }
+
+  /**
+   * Fetch status of a background upload job.
+   */
+  async getJobStatus(jobId: string) {
+    const job = await this.fileUploadQueue.getJob(jobId);
+
+    if (!job) {
+      throw new NotFoundException(`Job with ID ${jobId} not found`);
+    }
+
+    const state = await job.getState();
+
+    return {
+      jobId: job.id,
+      status: state,
+      progress: job.progress,
+      failedReason: job.failedReason || null,
+      result: (job.returnvalue as unknown) || null,
+    };
+  }
+
+  /**
+   * Upload a file and save metadata in database (Synchronous).
    */
   async uploadFile(
     userUuid: string,

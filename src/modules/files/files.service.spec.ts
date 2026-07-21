@@ -1,3 +1,4 @@
+import { getQueueToken } from '@nestjs/bullmq';
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -26,6 +27,11 @@ describe('FilesService', () => {
     deleteFile: jest.fn(),
   };
 
+  const mockQueue = {
+    add: jest.fn(),
+    getJob: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -37,6 +43,10 @@ describe('FilesService', () => {
         {
           provide: StorageService,
           useValue: mockStorageService,
+        },
+        {
+          provide: getQueueToken('file-upload'),
+          useValue: mockQueue,
         },
       ],
     }).compile();
