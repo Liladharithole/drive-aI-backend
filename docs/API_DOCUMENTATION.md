@@ -1,4 +1,4 @@
-# 📡 Comprehensive API Reference (32 Endpoints)
+# 📡 Comprehensive API Reference (37 Endpoints)
 
 All endpoints are documented interactively via Swagger UI at **`http://localhost:7001/api/docs`**.
 
@@ -84,3 +84,36 @@ All endpoints are documented interactively via Swagger UI at **`http://localhost
 | `GET`  | `/drive/recent`          | `DRIVE_AI`          | Get list of recently modified files (last 30) |
 | `GET`  | `/drive/trash`           | `DRIVE_AI`          | Get unified list of trashed folders and files |
 | `GET`  | `/drive/storage-summary` | `DRIVE_AI`          | Get storage summary used vs 15 GB limit       |
+
+---
+
+## 🤝 7. File Sharing & Collaboration (`/shares`)
+
+| Method   | Endpoint                    | Protection | Description                                               |
+| -------- | --------------------------- | ---------- | --------------------------------------------------------- |
+| `POST`   | `/shares`                   | JWT        | Share folder or file with another user by email           |
+| `GET`    | `/shares/shared-with-me`    | JWT        | List all folders/files shared with current user           |
+| `DELETE` | `/shares/:uuid`             | JWT        | Revoke sharing access for a shared folder/file            |
+| `POST`   | `/shares/public`            | JWT        | Generate public, password-protected expiring link         |
+| `GET`    | `/shares/public/:accessKey` | Public     | Access or download shared item (supports password unlock) |
+
+---
+
+## 🕒 8. Activity Audit Logs (`/audit`)
+
+| Method | Endpoint      | Protection | Description                                                                                                     |
+| ------ | ------------- | ---------- | --------------------------------------------------------------------------------------------------------------- |
+| `GET`  | `/audit/logs` | JWT        | Paginated chronological activity log feed (`file_activity_logs`, `folder_activity_logs`, `share_activity_logs`) |
+
+---
+
+## 🧠 9. Multilingual AI Document Intelligence & RAG Suite (`/ai`)
+
+| Method | Endpoint                           | Protection | Description                                                                               |
+| ------ | ---------------------------------- | ---------- | ----------------------------------------------------------------------------------------- |
+| `POST` | `/ai/files/:fileUuid/process`      | JWT        | Queue async text extraction, vector embedding, and summary generation                     |
+| `GET`  | `/ai/jobs/:jobId`                  | JWT        | Check background status & progress of AI document processing job                          |
+| `GET`  | `/ai/files/:fileUuid/summary`      | JWT        | Get 1-page executive summary, 5 key bullet takeaways, and auto-classification             |
+| `POST` | `/ai/files/:fileUuid/ask`          | JWT        | Multilingual RAG Q&A (Supports **English, Hindi, Marathi, Telugu, Tamil, Kannada**)       |
+| `POST` | `/ai/files/:fileUuid/ask-voice`    | JWT        | Voice Q&A & Speech-to-Text (STT) Q&A (Uploads `.mp3`, `.wav`, `.webm`, `.m4a` audio clip) |
+| `GET`  | `/ai/files/:fileUuid/chat-history` | JWT        | Get Q&A conversation history for a document                                               |

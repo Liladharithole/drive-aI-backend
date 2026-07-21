@@ -65,3 +65,141 @@ model File {
   @@index([userUuid, isTrashed])
   @@map("files")
 }
+
+enum ShareAccessLevel {
+  VIEWER
+  EDITOR
+}
+
+model FileShare {
+  id              BigInt           @id @default(autoincrement()) @db.UnsignedBigInt
+  uuid            String           @unique @db.Char(36)
+  
+  // What is being shared
+  fileUuid        String?          @map("file_uuid") @db.Char(36)
+  folderUuid      String?          @map("folder_uuid") @db.Char(36)
+  
+  // Who shared it & who receives it
+  sharedByUuid    String           @map("shared_by_uuid") @db.Char(36)
+  sharedWithEmail String           @map("shared_with_email") @db.VarChar(255)
+  accessLevel     ShareAccessLevel @map("access_level") @default(VIEWER)
+  
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+
+  @@unique([fileUuid, sharedWithEmail])
+  @@unique([folderUuid, sharedWithEmail])
+  @@index([sharedWithEmail])
+  @@map("file_shares")
+}
+
+model PublicLink {
+  id           BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  uuid         String    @unique @db.Char(36)
+  accessKey    String    @unique @map("access_key") @db.VarChar(255) // unique random token
+  
+  fileUuid     String?   @map("file_uuid") @db.Char(36)
+  folderUuid   String?   @map("folder_uuid") @db.Char(36)
+  
+  createdBy    String    @map("created_by") @db.Char(36)
+  passwordHash String?   @map("password_hash") @db.VarChar(255) // optional password lock
+  expiresAt    DateTime? @map("expires_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  @@map("public_links")
+}
+
+model FileActivityLog {
+  id        BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  uuid      String   @unique @db.Char(36)
+  userUuid  String   @map("user_uuid") @db.Char(36)
+  fileUuid  String   @map("file_uuid") @db.Char(36)
+  
+  action    String   @db.VarChar(50) // UPLOAD, DOWNLOAD, RENAME, STAR, TRASH, DELETE, etc.
+  details   String?  @db.VarChar(1000)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userUuid])
+  @@index([fileUuid])
+  @@map("file_activity_logs")
+}
+
+model FolderActivityLog {
+  id         BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  uuid       String   @unique @db.Char(36)
+  userUuid   String   @map("user_uuid") @db.Char(36)
+  folderUuid String   @map("folder_uuid") @db.Char(36)
+  
+  action     String   @db.VarChar(50) // CREATE, RENAME, MOVE, STAR, TRASH, DELETE, etc.
+  details    String?  @db.VarChar(1000)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([userUuid])
+  @@index([folderUuid])
+  @@map("folder_activity_logs")
+}
+
+model ShareActivityLog {
+  id              BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  uuid            String   @unique @db.Char(36)
+  userUuid        String   @map("user_uuid") @db.Char(36) // Actor who shared/revoked
+  
+  itemType        String   @map("item_type") @db.VarChar(20) // FILE or FOLDER
+  itemUuid        String   @map("item_uuid") @db.Char(36)
+  sharedWithEmail String?  @map("shared_with_email") @db.VarChar(255) // Recipient email (if user share)
+  action          String   @db.VarChar(50) // SHARE, REVOKE, CREATE_PUBLIC_LINK, PUBLIC_ACCESS
+  details         String?  @db.VarChar(1000)
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@index([userUuid])
+  @@index([itemUuid])
+  @@map("share_activity_logs")
+}
+
+model FileAiSummary {
+  id           BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  uuid         String   @unique @db.Char(36)
+  fileUuid     String   @unique @map("file_uuid") @db.Char(36)
+  
+  summary      String   @db.Text
+  keyTakeaways String   @map("key_takeaways") @db.Text // JSON stringified array of key bullet points
+  documentType String?  @map("document_type") @db.VarChar(50) // E.g. Invoice, Contract, Resume, Report
+  language     String?  @db.VarChar(20)
+  
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@map("file_ai_summaries")
+}
+
+model FileDocumentChunk {
+  id         BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  uuid       String   @unique @db.Char(36)
+  fileUuid   String   @map("file_uuid") @db.Char(36)
+  chunkIndex Int      @map("chunk_index")
+  
+  content    String   @db.Text
+  embedding  String   @db.LongText // JSON array of float vector embeddings (768 dimensions)
+  tokenCount Int      @map("token_count")
+  
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([fileUuid])
+  @@map("file_document_chunks")
+}
+
+model AiChatHistory {
+  id        BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  uuid      String   @unique @db.Char(36)
+  fileUuid  String   @map("file_uuid") @db.Char(36)
+  userUuid  String   @map("user_uuid") @db.Char(36)
+  
+  question  String   @db.Text
+  answer    String   @db.Text
+  sources   String?  @db.Text // JSON list of chunk UUIDs/indexes used
+  
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([fileUuid, userUuid])
+  @@map("ai_chat_histories")
+}

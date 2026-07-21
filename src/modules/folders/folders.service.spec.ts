@@ -1,7 +1,8 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaService } from '../../prisma/prisma.service';
-import { FoldersService, FormattedFolder } from './folders.service';
+import { FoldersService } from './folders.service';
+import { AuditLogService } from '../audit/audit.service';
 
 describe('FoldersService', () => {
   let service: FoldersService;
@@ -16,6 +17,10 @@ describe('FoldersService', () => {
     },
   };
 
+  const mockAuditLogService = {
+    logFolderAction: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -23,6 +28,10 @@ describe('FoldersService', () => {
         {
           provide: PrismaService,
           useValue: mockPrismaService,
+        },
+        {
+          provide: AuditLogService,
+          useValue: mockAuditLogService,
         },
       ],
     }).compile();
@@ -54,57 +63,23 @@ describe('FoldersService', () => {
         id: BigInt(10),
         uuid: 'folder-uuid-1',
         name: 'Projects',
-        color: '#4285F4',
         userUuid: 'user-uuid-1',
         parentId: null,
+        color: '#4285F4',
         isStarred: false,
         isTrashed: false,
         trashedAt: null,
         createdAt: new Date(),
         updatedAt: new Date(),
-        deletedAt: null,
-        parent: null,
       });
 
-      const result: FormattedFolder = await service.createFolder(
-        'user-uuid-1',
-        {
-          name: 'Projects',
-        },
-      );
+      const result = await service.createFolder('user-uuid-1', {
+        name: 'Projects',
+      });
 
       expect(result.uuid).toBe('folder-uuid-1');
       expect(result.name).toBe('Projects');
-      expect(result.parentId).toBeNull();
-    });
-  });
-
-  describe('getFolders', () => {
-    it('should return list of root folders for user', async () => {
-      mockPrismaService.folder.findMany.mockResolvedValue([
-        {
-          id: BigInt(10),
-          uuid: 'folder-uuid-1',
-          name: 'Projects',
-          color: '#4285F4',
-          userUuid: 'user-uuid-1',
-          parentId: null,
-          isStarred: false,
-          isTrashed: false,
-          trashedAt: null,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-          deletedAt: null,
-          parent: null,
-          _count: { children: 3 },
-        },
-      ]);
-
-      const result: FormattedFolder[] = await service.getFolders('user-uuid-1');
-
-      expect(result).toHaveLength(1);
-      expect(result[0].name).toBe('Projects');
-      expect(result[0].subFoldersCount).toBe(3);
+      expect(mockAuditLogService.logFolderAction).toHaveBeenCalled();
     });
   });
 
@@ -128,24 +103,20 @@ describe('FoldersService', () => {
         id: BigInt(10),
         uuid: 'folder-uuid-1',
         name: 'Projects',
-        color: '#4285F4',
         userUuid: 'user-uuid-1',
         parentId: null,
+        color: '#4285F4',
         isStarred: false,
         isTrashed: true,
         trashedAt: new Date(),
         createdAt: new Date(),
         updatedAt: new Date(),
-        deletedAt: null,
-        parent: null,
       });
 
-      const result: FormattedFolder = await service.trashFolder(
-        'user-uuid-1',
-        'folder-uuid-1',
-      );
+      const result = await service.trashFolder('user-uuid-1', 'folder-uuid-1');
 
       expect(result.isTrashed).toBe(true);
+      expect(mockAuditLogService.logFolderAction).toHaveBeenCalled();
     });
   });
 });

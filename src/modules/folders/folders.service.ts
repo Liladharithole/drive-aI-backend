@@ -14,6 +14,7 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateFolderDto } from './dto/create-folder.dto';
 import { UpdateFolderDto } from './dto/update-folder.dto';
+import { AuditLogService } from '../audit/audit.service';
 
 export type FolderWithRelations = Folder & {
   parent?: Folder | null;
@@ -42,7 +43,10 @@ export interface FormattedFolder {
 export class FoldersService {
   private readonly logger = new Logger(FoldersService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditLogService: AuditLogService,
+  ) {}
 
   /**
    * Helper to format raw Prisma folder object into clean API response.
@@ -131,6 +135,15 @@ export class FoldersService {
     this.logger.log(
       `Folder created: ${folder.name} (${folder.uuid}) for user ${userUuid}`,
     );
+
+    // Audit Log
+    await this.auditLogService.logFolderAction(
+      userUuid,
+      folder.uuid,
+      'CREATE_FOLDER',
+      `Created folder "${folder.name}"`,
+    );
+
     return this.formatFolder(folder, userTimezone);
   }
 
@@ -224,10 +237,12 @@ export class FoldersService {
     }
 
     let newParentId = folder.parentId;
+    let isMoved = false;
 
     if (dto.parentUuid !== undefined) {
       if (dto.parentUuid === null || dto.parentUuid === '') {
         newParentId = null;
+        isMoved = folder.parentId !== null;
       } else {
         const parentFolder = await this.prisma.folder.findFirst({
           where: {
@@ -245,6 +260,7 @@ export class FoldersService {
           throw new ConflictException('Cannot set a folder as its own parent');
         }
         newParentId = parentFolder.id;
+        isMoved = folder.parentId !== parentFolder.id;
       }
     }
 
@@ -260,6 +276,30 @@ export class FoldersService {
         parent: true,
       },
     });
+
+    // Audit Log
+    let auditAction = 'UPDATE_FOLDER';
+    let auditDetails = `Updated folder metadata for "${updatedFolder.name}"`;
+
+    if (dto.name !== undefined && dto.name.trim() !== folder.name) {
+      auditAction = 'RENAME_FOLDER';
+      auditDetails = `Renamed folder from "${folder.name}" to "${dto.name.trim()}"`;
+    } else if (isMoved) {
+      auditAction = 'MOVE_FOLDER';
+      auditDetails = `Moved folder "${updatedFolder.name}" to a new directory`;
+    } else if (dto.isStarred !== undefined) {
+      auditAction = dto.isStarred ? 'STAR_FOLDER' : 'UNSTAR_FOLDER';
+      auditDetails = dto.isStarred
+        ? `Starred folder "${updatedFolder.name}"`
+        : `Unstarred folder "${updatedFolder.name}"`;
+    }
+
+    await this.auditLogService.logFolderAction(
+      userUuid,
+      updatedFolder.uuid,
+      auditAction,
+      auditDetails,
+    );
 
     return this.formatFolder(updatedFolder, userTimezone);
   }
@@ -293,6 +333,15 @@ export class FoldersService {
     });
 
     this.logger.log(`Folder trashed: ${folder.name} (${folder.uuid})`);
+
+    // Audit Log
+    await this.auditLogService.logFolderAction(
+      userUuid,
+      folder.uuid,
+      'TRASH_FOLDER',
+      `Trashed folder "${folder.name}"`,
+    );
+
     return this.formatFolder(trashedFolder, userTimezone);
   }
 
@@ -323,6 +372,14 @@ export class FoldersService {
       },
     });
 
+    // Audit Log
+    await this.auditLogService.logFolderAction(
+      userUuid,
+      folder.uuid,
+      'RESTORE_FOLDER',
+      `Restored folder "${folder.name}" from Trash Bin`,
+    );
+
     return this.formatFolder(restoredFolder, userTimezone);
   }
 
@@ -343,6 +400,15 @@ export class FoldersService {
     });
 
     this.logger.log(`Folder permanently deleted: ${folder.uuid}`);
+
+    // Audit Log
+    await this.auditLogService.logFolderAction(
+      userUuid,
+      folder.uuid,
+      'DELETE_FOLDER',
+      `Permanently deleted folder "${folder.name}"`,
+    );
+
     return {
       success: true,
       message: 'Folder permanently deleted',

@@ -4,6 +4,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaService } from '../../prisma/prisma.service';
 import { FilesService } from './files.service';
 import { StorageService } from './storage/storage.service';
+import { AuditLogService } from '../audit/audit.service';
 
 describe('FilesService', () => {
   let service: FilesService;
@@ -32,6 +33,10 @@ describe('FilesService', () => {
     getJob: jest.fn(),
   };
 
+  const mockAuditLogService = {
+    logFileAction: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -47,6 +52,10 @@ describe('FilesService', () => {
         {
           provide: getQueueToken('file-upload'),
           useValue: mockQueue,
+        },
+        {
+          provide: AuditLogService,
+          useValue: mockAuditLogService,
         },
       ],
     }).compile();
@@ -117,6 +126,7 @@ describe('FilesService', () => {
       expect(result.uuid).toBe('file-uuid-10');
       expect(result.name).toBe('Report.pdf');
       expect(result.extension).toBe('pdf');
+      expect(mockAuditLogService.logFileAction).toHaveBeenCalled();
     });
   });
 
@@ -159,6 +169,7 @@ describe('FilesService', () => {
       const result = await service.trashFile('user-uuid-1', 'file-uuid-10');
 
       expect(result.isTrashed).toBe(true);
+      expect(mockAuditLogService.logFileAction).toHaveBeenCalled();
     });
   });
 });

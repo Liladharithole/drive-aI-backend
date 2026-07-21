@@ -21,6 +21,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { UploadFileDto } from './dto/create-file.dto';
 import { UpdateFileDto } from './dto/update-file.dto';
 import { StorageService } from './storage/storage.service';
+import { AuditLogService } from '../audit/audit.service';
 
 export interface FormattedFile {
   id: string;
@@ -51,6 +52,7 @@ export class FilesService {
     private readonly prisma: PrismaService,
     private readonly storageService: StorageService,
     @InjectQueue('file-upload') private readonly fileUploadQueue: Queue,
+    private readonly auditLogService: AuditLogService,
   ) {
     if (!existsSync(this.tempUploadDir)) {
       mkdirSync(this.tempUploadDir, { recursive: true });
@@ -281,6 +283,15 @@ export class FilesService {
     this.logger.log(
       `Uploaded file: ${createdFile.name} (${createdFile.uuid}) for user ${userUuid}`,
     );
+
+    // Audit Log
+    await this.auditLogService.logFileAction(
+      userUuid,
+      createdFile.uuid,
+      'UPLOAD_FILE',
+      `Uploaded file "${createdFile.name}"`,
+    );
+
     return this.formatFile(createdFile, userTimezone);
   }
 
@@ -349,10 +360,12 @@ export class FilesService {
     }
 
     let newFolderUuid = file.folderUuid;
+    let isMoved = false;
 
     if (dto.folderUuid !== undefined) {
       if (dto.folderUuid === null || dto.folderUuid === '') {
         newFolderUuid = null;
+        isMoved = file.folderUuid !== null;
       } else {
         const folder = await this.prisma.folder.findFirst({
           where: {
@@ -367,6 +380,7 @@ export class FilesService {
           throw new NotFoundException('Target folder not found');
         }
         newFolderUuid = folder.uuid;
+        isMoved = file.folderUuid !== folder.uuid;
       }
     }
 
@@ -378,6 +392,30 @@ export class FilesService {
         folderUuid: newFolderUuid,
       },
     });
+
+    // Audit Log
+    let auditAction = 'UPDATE_FILE';
+    let auditDetails = `Updated metadata for file "${updatedFile.name}"`;
+
+    if (dto.name !== undefined && dto.name.trim() !== file.name) {
+      auditAction = 'RENAME_FILE';
+      auditDetails = `Renamed file from "${file.name}" to "${dto.name.trim()}"`;
+    } else if (isMoved) {
+      auditAction = 'MOVE_FILE';
+      auditDetails = `Moved file "${updatedFile.name}" to a new directory`;
+    } else if (dto.isStarred !== undefined) {
+      auditAction = dto.isStarred ? 'STAR_FILE' : 'UNSTAR_FILE';
+      auditDetails = dto.isStarred
+        ? `Starred file "${updatedFile.name}"`
+        : `Unstarred file "${updatedFile.name}"`;
+    }
+
+    await this.auditLogService.logFileAction(
+      userUuid,
+      updatedFile.uuid,
+      auditAction,
+      auditDetails,
+    );
 
     return this.formatFile(updatedFile, userTimezone);
   }
@@ -408,6 +446,15 @@ export class FilesService {
     });
 
     this.logger.log(`File trashed: ${file.name} (${file.uuid})`);
+
+    // Audit Log
+    await this.auditLogService.logFileAction(
+      userUuid,
+      file.uuid,
+      'TRASH_FILE',
+      `Trashed file "${file.name}"`,
+    );
+
     return this.formatFile(trashedFile, userTimezone);
   }
 
@@ -435,6 +482,14 @@ export class FilesService {
       },
     });
 
+    // Audit Log
+    await this.auditLogService.logFileAction(
+      userUuid,
+      file.uuid,
+      'RESTORE_FILE',
+      `Restored file "${file.name}" from Trash Bin`,
+    );
+
     return this.formatFile(restoredFile, userTimezone);
   }
 
@@ -459,6 +514,15 @@ export class FilesService {
     });
 
     this.logger.log(`File permanently deleted: ${file.uuid}`);
+
+    // Audit Log
+    await this.auditLogService.logFileAction(
+      userUuid,
+      file.uuid,
+      'DELETE_FILE',
+      `Permanently deleted file "${file.name}"`,
+    );
+
     return {
       success: true,
       message: 'File permanently deleted',
@@ -478,6 +542,14 @@ export class FilesService {
     }
 
     const buffer = await this.storageService.getFileBuffer(file.storageKey);
+
+    // Audit Log
+    await this.auditLogService.logFileAction(
+      userUuid,
+      file.uuid,
+      'DOWNLOAD_FILE',
+      `Downloaded file "${file.name}"`,
+    );
 
     return {
       filename: file.name,

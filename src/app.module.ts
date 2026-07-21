@@ -5,11 +5,14 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { createPinoHttpOptions } from './logger/pino-http.config';
 import { AdminModule } from './modules/admin/admin.module';
+import { AuditModule } from './modules/audit/audit.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { DriveModule } from './modules/drive/drive.module';
 import { FilesModule } from './modules/files/files.module';
 import { FoldersModule } from './modules/folders/folders.module';
 import { ProductsModule } from './modules/products/products.module';
+import { SharesModule } from './modules/shares/shares.module';
+import { AiModule } from './modules/ai/ai.module';
 import { PrismaCentralCoreModule } from './prisma-central-core/prisma-central-core.module';
 import { PrismaModule } from './prisma/prisma.module';
 
@@ -32,6 +35,9 @@ import { PrismaModule } from './prisma/prisma.module';
     FilesModule,
     DriveModule,
     AdminModule,
+    SharesModule,
+    AuditModule,
+    AiModule,
   ],
   controllers: [AppController],
   providers: [AppService],
