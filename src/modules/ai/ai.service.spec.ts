@@ -2,9 +2,12 @@ import { getQueueToken } from '@nestjs/bullmq';
 import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SharesService } from '../shares/shares.service';
+import { FilesService } from '../files/files.service';
 import { AiService } from './ai.service';
 import { GeminiService } from './services/gemini.service';
+import { TextExtractorService } from './services/text-extractor.service';
 import { VectorSearchService } from './services/vector-search.service';
+import { DocumentExporterService } from './services/document-exporter.service';
 
 describe('AiService', () => {
   let service: AiService;
@@ -29,14 +32,29 @@ describe('AiService', () => {
     hasAccess: jest.fn(),
   };
 
+  const mockFilesService = {
+    getDownloadPayload: jest.fn(),
+    uploadFile: jest.fn(),
+  };
+
+  const mockTextExtractorService = {
+    extractText: jest.fn(),
+  };
+
   const mockGeminiService = {
     generateEmbedding: jest.fn(),
     generateContent: jest.fn(),
     transcribeAudio: jest.fn(),
+    translateText: jest.fn(),
   };
 
   const mockVectorSearchService = {
     findTopKMatches: jest.fn(),
+  };
+
+  const mockDocumentExporterService = {
+    generatePdfBuffer: jest.fn(),
+    generateDocxBuffer: jest.fn(),
   };
 
   const mockQueue = {
@@ -57,12 +75,24 @@ describe('AiService', () => {
           useValue: mockSharesService,
         },
         {
+          provide: FilesService,
+          useValue: mockFilesService,
+        },
+        {
+          provide: TextExtractorService,
+          useValue: mockTextExtractorService,
+        },
+        {
           provide: GeminiService,
           useValue: mockGeminiService,
         },
         {
           provide: VectorSearchService,
           useValue: mockVectorSearchService,
+        },
+        {
+          provide: DocumentExporterService,
+          useValue: mockDocumentExporterService,
         },
         {
           provide: getQueueToken('ai-document-processing'),
@@ -180,6 +210,46 @@ describe('AiService', () => {
 
       expect(result.transcribedQuestion).toBe('What is the contract price?');
       expect(result.answer).toBe('The price is $50,000 USD.');
+    });
+  });
+
+  describe('translateAndExportDocument', () => {
+    it('should translate text and export as PDF file to drive', async () => {
+      mockSharesService.hasAccess.mockResolvedValue(true);
+      mockPrismaService.file.findFirst.mockResolvedValue({
+        uuid: 'file-1',
+        name: 'Contract.pdf',
+        extension: 'pdf',
+        folderUuid: null,
+      });
+      mockFilesService.getDownloadPayload.mockResolvedValue({
+        buffer: Buffer.from('Original text'),
+        mimeType: 'application/pdf',
+      });
+      mockTextExtractorService.extractText.mockResolvedValue(
+        'Original text content',
+      );
+      mockGeminiService.translateText.mockResolvedValue('अनुवादित पाठ सामग्री');
+      mockDocumentExporterService.generatePdfBuffer.mockResolvedValue(
+        Buffer.from('PDF Buffer'),
+      );
+      mockFilesService.uploadFile.mockResolvedValue({
+        uuid: 'translated-file-1',
+        name: 'Contract_Hindi.pdf',
+      });
+
+      const result = await service.translateAndExportDocument(
+        'user-1',
+        'user1@example.com',
+        'file-1',
+        'Hindi',
+        'pdf',
+        true,
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.translatedFileName).toBe('Contract_Hindi.pdf');
+      expect(result.translatedFile.uuid).toBe('translated-file-1');
     });
   });
 });

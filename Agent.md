@@ -75,10 +75,12 @@ Always use Prisma Migrations to make database changes. Do **not** bypass them.
 
 ## 🧪 4. Testing, Code Quality & Linter
 
-- **Strict Types**: Always write explicit Typescript types. Avoid using `any` unless absolutely necessary (e.g. when mapping raw external callbacks). Cast safely using `instanceof` or TS assertions.
-- **Write Unit Tests**: Whenever you create a new service or refactor logic, you must update or add corresponding Jest unit tests (e.g., `*.spec.ts`).
+- **Strict Types**: Always write explicit Typescript types. Avoid using `any` unless absolutely necessary. Cast safely using `instanceof` or TS assertions.
+- **Backend Unit Tests**: Whenever you create or refactor backend logic, you must update or add corresponding Jest unit tests (`*.spec.ts`).
+- **Frontend Unit & Page Tests**: For every new frontend module, store, helper, or component, colocated Vitest unit tests (`*.test.ts` / `*.test.tsx`) must be written covering **positive, negative, and edge cases**.
+- **Frontend End-to-End (E2E) Tests**: Complex user flows (e.g. signup -> login -> page navigation) must be covered with Playwright E2E tests inside the `/e2e` directory.
 - **Validation Commands**:
   - Run build validation: `npm run build`
   - Run unit test suite: `npm test`
   - Run ESLint code checks: `npm run lint`
-- All three checks must pass with **100% success** (0 errors) before pushing any code to GitHub.
+- All checks must pass with **100% success** (0 errors) before pushing any code to GitHub.

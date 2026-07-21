@@ -48,4 +48,16 @@ describe('GeminiService', () => {
       expect(typeof text).toBe('string');
     });
   });
+
+  describe('translateText', () => {
+    it('should return translated text string', async () => {
+      const translated = await service.translateText(
+        'Sample document text',
+        'Hindi',
+      );
+
+      expect(translated).toBeDefined();
+      expect(typeof translated).toBe('string');
+    });
+  });
 });

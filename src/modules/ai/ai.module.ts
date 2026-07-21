@@ -9,6 +9,7 @@ import { AiDocumentProcessor } from './processors/ai-document.processor';
 import { GeminiService } from './services/gemini.service';
 import { TextExtractorService } from './services/text-extractor.service';
 import { VectorSearchService } from './services/vector-search.service';
+import { DocumentExporterService } from './services/document-exporter.service';
 
 @Module({
   imports: [
@@ -25,8 +26,9 @@ import { VectorSearchService } from './services/vector-search.service';
     GeminiService,
     TextExtractorService,
     VectorSearchService,
+    DocumentExporterService,
     AiDocumentProcessor,
   ],
-  exports: [AiService],
+  exports: [AiService, DocumentExporterService],
 })
 export class AiModule {}

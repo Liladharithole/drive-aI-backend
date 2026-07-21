@@ -168,6 +168,40 @@ export class GeminiService implements OnModuleInit {
   }
 
   /**
+   * Translate document text into requested target language while strictly preserving formatting and structure.
+   */
+  async translateText(text: string, targetLanguage: string): Promise<string> {
+    if (!this.ai) {
+      this.logger.warn(
+        'Gemini API key not configured. Returning mock translated text.',
+      );
+      return `[Mock Translation to ${targetLanguage}]:\n${text}`;
+    }
+
+    const prompt = `You are a professional document translator. Translate the following text into ${targetLanguage} (e.g., Hindi, Marathi, Telugu, Tamil, Kannada, English, Spanish, French, German, etc.).
+
+Instructions:
+1. Preserve all paragraph breaks, headings, bullet lists, and structural layout.
+2. Provide a high-quality, fluent, and contextually accurate translation.
+3. Return ONLY the translated text without conversational preamble or markdown code blocks.
+
+Text to translate:
+"""
+${text}
+"""`;
+
+    try {
+      const response = await this.generateContent(prompt);
+      return response.trim();
+    } catch (error) {
+      this.logger.error(
+        `Error translating text via Gemini API: ${(error as Error).message}`,
+      );
+      throw error;
+    }
+  }
+
+  /**
    * Generate 1-page summary, 5 bullet points, auto-classification, and language detection for a document in requested target language.
    */
   async generateSummary(

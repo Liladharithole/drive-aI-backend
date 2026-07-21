@@ -10,7 +10,10 @@ import { Queue } from 'bullmq';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SharesService } from '../shares/shares.service';
+import { FilesService } from '../files/files.service';
+import { TextExtractorService } from './services/text-extractor.service';
 import { GeminiService } from './services/gemini.service';
+import { DocumentExporterService } from './services/document-exporter.service';
 import {
   VectorCandidate,
   VectorSearchService,
@@ -24,8 +27,11 @@ export class AiService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly sharesService: SharesService,
+    private readonly filesService: FilesService,
+    private readonly textExtractorService: TextExtractorService,
     private readonly geminiService: GeminiService,
     private readonly vectorSearchService: VectorSearchService,
+    private readonly documentExporterService: DocumentExporterService,
     @InjectQueue('ai-document-processing') private readonly aiQueue: Queue,
   ) {}
 
@@ -60,53 +66,44 @@ export class AiService {
       throw new NotFoundException('File not found');
     }
 
-    // 2. Queue BullMQ job
-    const job = await this.aiQueue.add(
-      'process-document',
-      { fileUuid, userUuid },
-      {
-        attempts: 3,
-        backoff: 5000,
-      },
-    );
-
-    this.logger.log(
-      `Queued AI processing job ${job.id} for file ${file.name} (${fileUuid})`,
-    );
+    // Add job to BullMQ queue
+    const job = await this.aiQueue.add('process-document', {
+      fileUuid: file.uuid,
+      userUuid,
+    });
 
     return {
+      message: 'AI document processing job queued successfully',
       jobId: job.id,
+      fileUuid: file.uuid,
       status: 'processing',
-      fileUuid,
-      message: 'AI document processing queued in background',
     };
   }
 
   /**
-   * Fetch job processing status.
+   * Get progress and status of an AI processing job.
    */
   async getJobStatus(jobId: string) {
     const job = await this.aiQueue.getJob(jobId);
 
     if (!job) {
-      throw new NotFoundException(
-        `AI processing job with ID ${jobId} not found`,
-      );
+      throw new NotFoundException(`AI Processing Job #${jobId} not found`);
     }
 
     const state = await job.getState();
+    const progress = job.progress;
 
     return {
       jobId: job.id,
-      status: state,
-      progress: job.progress,
+      state,
+      progress,
       failedReason: job.failedReason || null,
-      result: (job.returnvalue as unknown) || null,
+      returnvalue: (job.returnvalue as unknown) || null,
     };
   }
 
   /**
-   * Fetch 1-page summary, key takeaways, and document classification.
+   * Fetch generated 1-page summary, key takeaways, and document type.
    */
   async getSummary(
     userUuid: string,
@@ -124,7 +121,7 @@ export class AiService {
 
     if (!hasAccess) {
       throw new ForbiddenException(
-        'You do not have permission to view AI summaries for this file',
+        'You do not have permission to view summary for this file',
       );
     }
 
@@ -134,19 +131,18 @@ export class AiService {
 
     if (!summaryRecord) {
       throw new NotFoundException(
-        'AI summary not found for this file. Please process the document with AI first.',
+        'AI Summary has not been generated for this file yet. Please trigger AI processing first.',
       );
     }
 
-    let keyTakeaways: string[] = [];
+    let keyTakeaways: unknown[] = [];
     try {
-      keyTakeaways = JSON.parse(summaryRecord.keyTakeaways) as string[];
+      keyTakeaways = JSON.parse(summaryRecord.keyTakeaways) as unknown[];
     } catch {
-      keyTakeaways = [summaryRecord.keyTakeaways];
+      keyTakeaways = [];
     }
 
     return {
-      uuid: summaryRecord.uuid,
       fileUuid: summaryRecord.fileUuid,
       summary: summaryRecord.summary,
       keyTakeaways,
@@ -157,7 +153,7 @@ export class AiService {
   }
 
   /**
-   * Context-Grounded RAG Question & Answering Engine.
+   * Ask a natural language question about document content (RAG Engine).
    */
   async askQuestion(
     userUuid: string,
@@ -316,6 +312,118 @@ Instructions:
     return {
       transcribedQuestion,
       ...ragResult,
+    };
+  }
+
+  /**
+   * Translate document into target language and export as a new PDF/DOCX file in user's drive.
+   */
+  async translateAndExportDocument(
+    userUuid: string,
+    userEmail: string,
+    fileUuid: string,
+    targetLanguage = 'Hindi',
+    exportFormat: 'pdf' | 'docx' | 'txt' = 'pdf',
+    saveToDrive = true,
+    userTimezone = 'Asia/Kolkata',
+  ) {
+    // 1. Permission check
+    const hasAccess = await this.sharesService.hasAccess(
+      userUuid,
+      userEmail,
+      fileUuid,
+      undefined,
+      'VIEWER',
+    );
+
+    if (!hasAccess) {
+      throw new ForbiddenException(
+        'You do not have permission to translate this file',
+      );
+    }
+
+    const file = await this.prisma.file.findFirst({
+      where: { uuid: fileUuid, deletedAt: null },
+    });
+
+    if (!file) {
+      throw new NotFoundException('File not found');
+    }
+
+    // 2. Fetch original file buffer and extract text
+    const downloadPayload = await this.filesService.getDownloadPayload(
+      userUuid,
+      fileUuid,
+    );
+    const originalText = await this.textExtractorService.extractText(
+      downloadPayload.buffer,
+      downloadPayload.mimeType,
+      file.extension,
+    );
+
+    // 3. Translate text via Gemini
+    this.logger.log(
+      `Translating document ${file.name} to ${targetLanguage}...`,
+    );
+    const translatedText = await this.geminiService.translateText(
+      originalText,
+      targetLanguage,
+    );
+
+    // 4. Generate exported document buffer
+    const nameWithoutExt =
+      file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
+    const cleanTargetLang = targetLanguage.replace(/[^a-zA-Z0-9]/g, '');
+    const exportExt = exportFormat.toLowerCase();
+    const translatedFileName = `${nameWithoutExt}_${cleanTargetLang}.${exportExt}`;
+
+    let exportedBuffer: Buffer;
+    let mimeType: string;
+
+    if (exportExt === 'docx') {
+      exportedBuffer = await this.documentExporterService.generateDocxBuffer(
+        `${nameWithoutExt} (${targetLanguage})`,
+        translatedText,
+      );
+      mimeType =
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    } else if (exportExt === 'txt') {
+      exportedBuffer = Buffer.from(translatedText, 'utf-8');
+      mimeType = 'text/plain';
+    } else {
+      exportedBuffer = await this.documentExporterService.generatePdfBuffer(
+        `${nameWithoutExt} (${targetLanguage})`,
+        translatedText,
+      );
+      mimeType = 'application/pdf';
+    }
+
+    // 5. Save translated file to user's drive
+    let savedFile: Record<string, any> | null = null;
+    if (saveToDrive) {
+      savedFile = await this.filesService.uploadFile(
+        userUuid,
+        exportedBuffer,
+        translatedFileName,
+        mimeType,
+        { folderUuid: file.folderUuid || undefined },
+        userTimezone,
+      );
+
+      if (savedFile) {
+        this.logger.log(
+          `Saved translated file "${translatedFileName}" to user drive (${savedFile.uuid as string})`,
+        );
+      }
+    }
+
+    return {
+      success: true,
+      originalFileUuid: file.uuid,
+      translatedFileName,
+      targetLanguage,
+      exportFormat: exportExt,
+      translatedFile: savedFile,
     };
   }
 

@@ -29,6 +29,7 @@ import {
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AiService } from './ai.service';
 import { AskQuestionDto } from './dto/ask-question.dto';
+import { TranslateDocumentDto } from './dto/translate-document.dto';
 
 interface ExpressFile {
   buffer: Buffer;
@@ -155,6 +156,33 @@ export class AiController {
       file.buffer,
       file.mimetype || 'audio/webm',
       targetLanguage || 'English',
+    );
+  }
+
+  @ApiOperation({
+    summary:
+      'Translate document into target language and export as PDF/DOCX to Drive',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Document translated and exported to drive successfully',
+  })
+  @Post('files/:fileUuid/translate')
+  @HttpCode(HttpStatus.OK)
+  async translateDocument(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('fileUuid') fileUuid: string,
+    @Body() dto: TranslateDocumentDto,
+    @Headers('x-timezone') timezone?: string,
+  ) {
+    return this.aiService.translateAndExportDocument(
+      user.uuid,
+      user.email,
+      fileUuid,
+      dto.targetLanguage,
+      dto.exportFormat || 'pdf',
+      dto.saveToDrive !== false,
+      timezone || 'Asia/Kolkata',
     );
   }
 
