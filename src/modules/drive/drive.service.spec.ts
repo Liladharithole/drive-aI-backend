@@ -91,7 +91,7 @@ describe('DriveService', () => {
 
       expect(result.usedBytes).toBe('104857600');
       expect(result.usedFormatted).toBe('100 MB');
-      expect(result.limitFormatted).toBe('15 GB');
+      expect(result.limitFormatted).toBe('5 GB');
     });
   });
 });

@@ -239,4 +239,61 @@ describe('SharesService', () => {
       );
     });
   });
+
+  describe('getSharedWithMe', () => {
+    it('should return shared folders and files mapped to the unified structure', async () => {
+      const mockShares = [
+        {
+          uuid: 'share-1',
+          sharedWithEmail: 'john@example.com',
+          accessLevel: ShareAccessLevel.VIEWER,
+          sharedByUuid: 'owner-1',
+          fileUuid: 'file-1',
+          folderUuid: null,
+          createdAt: new Date(),
+        },
+        {
+          uuid: 'share-2',
+          sharedWithEmail: 'john@example.com',
+          accessLevel: ShareAccessLevel.EDITOR,
+          sharedByUuid: 'owner-2',
+          fileUuid: null,
+          folderUuid: 'folder-1',
+          createdAt: new Date(),
+        },
+      ];
+
+      mockPrismaService.fileShare.findMany.mockResolvedValue(mockShares);
+      mockPrismaService.file.findFirst.mockResolvedValue({
+        uuid: 'file-1',
+        name: 'Invoice.pdf',
+        mimeType: 'application/pdf',
+        size: BigInt(2048),
+        extension: 'pdf',
+        createdAt: new Date(),
+      });
+      mockPrismaService.folder.findFirst.mockResolvedValue({
+        uuid: 'folder-1',
+        name: 'Marketing',
+        color: '#ff0000',
+        createdAt: new Date(),
+      });
+
+      const result = await service.getSharedWithMe('john@example.com');
+
+      expect(result).toHaveLength(2);
+      expect(result[0]).toMatchObject({
+        shareUuid: 'share-1',
+        accessLevel: ShareAccessLevel.VIEWER,
+        type: 'FILE',
+        item: { name: 'Invoice.pdf' },
+      });
+      expect(result[1]).toMatchObject({
+        shareUuid: 'share-2',
+        accessLevel: ShareAccessLevel.EDITOR,
+        type: 'FOLDER',
+        item: { name: 'Marketing' },
+      });
+    });
+  });
 });

@@ -83,6 +83,8 @@ async function bootstrap() {
         'x-user-id',
         'x-tenant-id',
         'x-user-role',
+        'Content-Disposition',
+        'Content-Length',
       ],
       maxAge: Number(process.env.CORS_MAX_AGE ?? 600),
       preflightContinue: false,
