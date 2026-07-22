@@ -251,14 +251,16 @@ export class FilesController {
   async downloadFile(
     @CurrentUser() user: AuthenticatedUser,
     @Param('uuid') uuid: string,
+    @Query('download') download: string,
     @Res() res: ExpressResponse,
   ) {
     const payload = await this.filesService.getDownloadPayload(user.uuid, uuid);
+    const isDownload = download === 'true';
 
     res.setHeader('Content-Type', payload.mimeType);
     res.setHeader(
       'Content-Disposition',
-      `attachment; filename="${encodeURIComponent(payload.filename)}"`,
+      `${isDownload ? 'attachment' : 'inline'}; filename="${encodeURIComponent(payload.filename)}"`,
     );
     res.setHeader('Content-Length', payload.size.toString());
     res.send(payload.buffer);

@@ -38,7 +38,7 @@ export interface StorageSummary {
 @Injectable()
 export class DriveService {
   private readonly logger = new Logger(DriveService.name);
-  private readonly defaultLimitBytes = 5368709120n; // 5 GB
+  private readonly defaultLimitBytes = 524288000n; // 500 MB
 
   constructor(private readonly prisma: PrismaService) {}
 
