@@ -63,6 +63,16 @@ Always use Prisma Migrations to make database changes. Do **not** bypass them.
    - Always let NestJS handle instantiation.
    - **Never** instantiate services using `new ServiceName()`. Always inject them via class constructors.
 
+### C. Clean Architecture & No Redundancy (DRY)
+
+- **Search Before Coding**: Before creating any utility, helper, or service method, search the codebase (`src/common/utils/`, `src/lib/utils.ts`, etc.) to see if a similar tool already exists. Avoid duplicate functions.
+- **Do Not Write Unnecessary Code**: Write lean, concise code. If a library helper or database method already does the job, leverage it rather than implementing custom solutions.
+
+### D. Component Reusability (Frontend UI)
+
+- **Check Existing Components**: Before creating any new UI component (buttons, modals, input layouts, alerts, select elements, loaders), check `src/components/ui/` and `src/components/` first.
+- **Reuse and Extend**: If a component exists, reuse it. If a component is missing a property (like a color variant, icon, size, or callback), extend the existing component's props rather than writing a new duplicate component.
+
 ---
 
 ## 🔢 3. Prisma BigInt Serialization Rule

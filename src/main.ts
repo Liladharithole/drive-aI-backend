@@ -76,6 +76,7 @@ async function bootstrap() {
         'x-user-id',
         'x-tenant-id',
         'x-user-role',
+        'x-timezone',
       ],
       exposedHeaders: [
         'x-request-id',
