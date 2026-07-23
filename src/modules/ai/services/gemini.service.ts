@@ -34,7 +34,11 @@ export class GeminiService implements OnModuleInit {
   private ai: GeminiAiClient | null = null;
 
   /* eslint-disable @typescript-eslint/no-implied-eval, @typescript-eslint/no-unsafe-call */
-  async onModuleInit() {
+  private async getAiClient(): Promise<GeminiAiClient | null> {
+    if (this.ai) {
+      return this.ai;
+    }
+
     const apiKey = process.env.GEMINI_API_KEY;
     if (
       apiKey &&
@@ -48,8 +52,9 @@ export class GeminiService implements OnModuleInit {
           GoogleGenAI: new (opts: { apiKey: string }) => GeminiAiClient;
         };
         const GoogleGenAI = genAiModule.GoogleGenAI;
-        this.ai = new GoogleGenAI({ apiKey });
+        this.ai = new GoogleGenAI({ apiKey: apiKey.trim() });
         this.logger.log('Gemini API client initialized successfully');
+        return this.ai;
       } catch (error) {
         this.logger.error(
           `Failed to initialize GoogleGenAI module: ${(error as Error).message}`,
@@ -60,8 +65,13 @@ export class GeminiService implements OnModuleInit {
         `GEMINI_API_KEY is missing or unconfigured (key presence: ${Boolean(apiKey)}). AI capabilities will run in mock mode.`,
       );
     }
+    return null;
   }
   /* eslint-enable @typescript-eslint/no-implied-eval, @typescript-eslint/no-unsafe-call */
+
+  async onModuleInit() {
+    await this.getAiClient();
+  }
 
   /**
    * Check if Gemini API client is active and configured.
@@ -74,7 +84,8 @@ export class GeminiService implements OnModuleInit {
    * Generate 768-dimension vector embedding for a text snippet using gemini-embedding-001.
    */
   async generateEmbedding(text: string): Promise<number[]> {
-    if (!this.ai) {
+    const ai = await this.getAiClient();
+    if (!ai) {
       this.logger.warn(
         'Gemini API key not configured. Generating deterministic fallback mock vector.',
       );
@@ -83,7 +94,7 @@ export class GeminiService implements OnModuleInit {
     }
 
     try {
-      const response = await this.ai.models.embedContent({
+      const response = await ai.models.embedContent({
         model: 'gemini-embedding-001',
         contents: text,
       });
@@ -114,7 +125,8 @@ export class GeminiService implements OnModuleInit {
     prompt: string,
     modelName = 'gemini-3.6-flash',
   ): Promise<string> {
-    if (!this.ai) {
+    const ai = await this.getAiClient();
+    if (!ai) {
       this.logger.warn(
         'Gemini API key not configured. Returning mock response.',
       );
@@ -132,7 +144,7 @@ export class GeminiService implements OnModuleInit {
     for (const model of uniqueModels) {
       try {
         this.logger.debug(`Attempting text generation with model: ${model}`);
-        const response = await this.ai.models.generateContent({
+        const response = await ai.models.generateContent({
           model: model,
           contents: prompt,
         });
@@ -161,7 +173,8 @@ export class GeminiService implements OnModuleInit {
     audioBuffer: Buffer,
     mimeType: string,
   ): Promise<string> {
-    if (!this.ai) {
+    const ai = await this.getAiClient();
+    if (!ai) {
       this.logger.warn(
         'Gemini API key not configured. Returning mock speech transcription.',
       );
@@ -181,7 +194,7 @@ export class GeminiService implements OnModuleInit {
         this.logger.debug(
           `Attempting audio transcription with model: ${model}`,
         );
-        const response = await this.ai.models.generateContent({
+        const response = await ai.models.generateContent({
           model: model,
           contents: [
             {
@@ -218,7 +231,8 @@ export class GeminiService implements OnModuleInit {
     contents: any[],
     modelName = 'gemini-3.6-flash',
   ): Promise<string> {
-    if (!this.ai) {
+    const ai = await this.getAiClient();
+    if (!ai) {
       this.logger.warn(
         'Gemini API key not configured. Returning mock response.',
       );
@@ -237,7 +251,7 @@ export class GeminiService implements OnModuleInit {
         this.logger.debug(
           `Attempting multimodal generation with model: ${model}`,
         );
-        const response = await this.ai.models.generateContent({
+        const response = await ai.models.generateContent({
           model: model,
           contents: contents,
         });
