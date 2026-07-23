@@ -4,6 +4,8 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { File } from '@prisma/client';
@@ -22,6 +24,8 @@ import { UploadFileDto } from './dto/create-file.dto';
 import { UpdateFileDto } from './dto/update-file.dto';
 import { StorageService } from './storage/storage.service';
 import { AuditLogService } from '../audit/audit.service';
+import { GeminiService } from '../ai/services/gemini.service';
+import { AiService } from '../ai/ai.service';
 
 export interface FormattedFile {
   id: string;
@@ -53,6 +57,10 @@ export class FilesService {
     private readonly storageService: StorageService,
     @InjectQueue('file-upload') private readonly fileUploadQueue: Queue,
     private readonly auditLogService: AuditLogService,
+    @Inject(forwardRef(() => GeminiService))
+    private readonly geminiService: GeminiService,
+    @Inject(forwardRef(() => AiService))
+    private readonly aiService: AiService,
   ) {
     if (!existsSync(this.tempUploadDir)) {
       mkdirSync(this.tempUploadDir, { recursive: true });
@@ -264,6 +272,20 @@ export class FilesService {
       originalName,
     );
 
+    // Generate filename embedding vector
+    let embeddingJson: string | null = null;
+    try {
+      const vector = await this.geminiService.generateEmbedding(
+        originalName.trim(),
+      );
+      embeddingJson = JSON.stringify(vector);
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      this.logger.warn(
+        `Failed to generate filename embedding for "${originalName}": ${errMsg}`,
+      );
+    }
+
     const createdFile = await this.prisma.file.create({
       data: {
         uuid,
@@ -275,6 +297,7 @@ export class FilesService {
         storageDriver: uploadResult.storageDriver,
         storageKey: uploadResult.storageKey,
         storageUrl: uploadResult.storageUrl,
+        embedding: embeddingJson,
         userUuid,
         folderUuid: targetFolderUuid,
       },
@@ -292,7 +315,40 @@ export class FilesService {
       `Uploaded file "${createdFile.name}"`,
     );
 
+    // Auto-queue document content chunks and text extraction processing for AI RAG Chat
+    try {
+      await this.aiService.queueDocumentProcessingDirect(
+        createdFile.uuid,
+        userUuid,
+      );
+      this.logger.log(
+        `Automatically queued AI document processing for: ${createdFile.name}`,
+      );
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      this.logger.warn(
+        `Failed to automatically queue AI processing for file "${createdFile.name}": ${errMsg}`,
+      );
+    }
+
     return this.formatFile(createdFile, userTimezone);
+  }
+
+  /**
+   * Calculate Cosine Similarity between two numerical vectors.
+   */
+  private cosineSimilarity(vecA: number[], vecB: number[]): number {
+    if (vecA.length !== vecB.length || vecA.length === 0) return 0;
+    let dotProduct = 0;
+    let normA = 0;
+    let normB = 0;
+    for (let i = 0; i < vecA.length; i++) {
+      dotProduct += vecA[i] * vecB[i];
+      normA += vecA[i] * vecA[i];
+      normB += vecB[i] * vecB[i];
+    }
+    if (normA === 0 || normB === 0) return 0;
+    return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
   }
 
   /**
@@ -304,6 +360,7 @@ export class FilesService {
     isStarred?: boolean,
     isTrashed?: boolean,
     userTimezone = 'Asia/Kolkata',
+    search?: string,
   ): Promise<FormattedFile[]> {
     const files = await this.prisma.file.findMany({
       where: {
@@ -320,7 +377,51 @@ export class FilesService {
       orderBy: { name: 'asc' },
     });
 
-    return files.map((f) => this.formatFile(f, userTimezone));
+    if (!search || !search.trim()) {
+      return files.map((f) => this.formatFile(f, userTimezone));
+    }
+
+    const searchQuery = search.trim().toLowerCase();
+    let queryVector: number[] = [];
+
+    try {
+      queryVector = await this.geminiService.generateEmbedding(searchQuery);
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      this.logger.warn(`Failed to embed search query "${search}": ${errMsg}`);
+    }
+
+    const scoredFiles = files.map((f) => {
+      let score = 0;
+
+      // 1. Keyword search (substring match on original name or formatted name)
+      if (f.name.toLowerCase().includes(searchQuery)) {
+        score += 1.0;
+      }
+
+      // 2. Semantic search (vector similarity on filename embedding)
+      if (queryVector.length > 0 && f.embedding) {
+        try {
+          const fileVector = JSON.parse(f.embedding) as number[];
+          const similarity = this.cosineSimilarity(queryVector, fileVector);
+          if (similarity > 0.3) {
+            // similarity threshold
+            score += similarity * 0.8;
+          }
+        } catch {
+          // ignore JSON parsing issues
+        }
+      }
+
+      return { file: f, score };
+    });
+
+    const matchedFiles = scoredFiles
+      .filter((sf) => sf.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .map((sf) => this.formatFile(sf.file, userTimezone));
+
+    return matchedFiles;
   }
 
   /**

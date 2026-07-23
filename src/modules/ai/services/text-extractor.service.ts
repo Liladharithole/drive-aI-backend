@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import * as mammoth from 'mammoth';
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-import pdfParse = require('pdf-parse');
+import { PDFParse } from 'pdf-parse';
+import { GeminiService } from './gemini.service';
 
 export interface DocumentChunk {
   chunkIndex: number;
@@ -13,13 +13,21 @@ interface PdfParseResult {
   text: string;
 }
 
-const parsePdf = pdfParse as unknown as (
-  buffer: Buffer,
-) => Promise<PdfParseResult>;
+const parsePdf = async (buffer: Buffer): Promise<PdfParseResult> => {
+  const parser = new PDFParse({ data: buffer });
+  try {
+    const result = await parser.getText();
+    return { text: result.text || '' };
+  } finally {
+    await parser.destroy();
+  }
+};
 
 @Injectable()
 export class TextExtractorService {
   private readonly logger = new Logger(TextExtractorService.name);
+
+  constructor(private readonly geminiService: GeminiService) {}
 
   /**
    * Extract raw text content from PDF, Word (.docx), or plain text files.
@@ -78,6 +86,59 @@ export class TextExtractorService {
         )
       ) {
         return buffer.toString('utf-8').trim();
+      }
+
+      // 4. Image Files (PNG, JPG, JPEG, WEBP, etc.)
+      if (
+        ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp'].includes(normalizedExt) ||
+        normalizedMime.startsWith('image/')
+      ) {
+        this.logger.debug(
+          'Extracting text/content from image using Gemini Vision...',
+        );
+        const base64Image = buffer.toString('base64');
+        const ocrPrompt = [
+          {
+            inlineData: {
+              mimeType: normalizedMime || 'image/png',
+              data: base64Image,
+            },
+          },
+          'Analyze this image. If it is a document or page, perform OCR and transcribe all text. If it is a diagram, chart, or screenshot, describe all visible elements, relationships, labels, and context in detail. Output the text clearly.',
+        ];
+        return await this.geminiService.generateContentMultimodal(ocrPrompt);
+      }
+
+      // 5. Audio Files (MP3, WAV, M4A, WEBM, etc.)
+      if (
+        ['mp3', 'wav', 'm4a', 'ogg', 'webm', 'mp4a'].includes(normalizedExt) ||
+        normalizedMime.startsWith('audio/')
+      ) {
+        this.logger.debug(
+          'Extracting audio transcription using Gemini Audio Transcription...',
+        );
+        return await this.geminiService.transcribeAudio(buffer, normalizedMime);
+      }
+
+      // 6. Video Files (MP4, AVI, MOV, MKV, WEBM, etc.)
+      if (
+        ['mp4', 'avi', 'mov', 'mkv', 'webm'].includes(normalizedExt) ||
+        normalizedMime.startsWith('video/')
+      ) {
+        this.logger.debug(
+          'Extracting video description using Gemini Video understanding...',
+        );
+        const base64Video = buffer.toString('base64');
+        const videoPrompt = [
+          {
+            inlineData: {
+              mimeType: normalizedMime || 'video/mp4',
+              data: base64Video,
+            },
+          },
+          'Analyze this video. Transcribe any spoken audio, and describe all visual events, text overlays, objects, actions, and settings in detail so that they can be searched semantically. Return the description clearly.',
+        ];
+        return await this.geminiService.generateContentMultimodal(videoPrompt);
       }
 
       throw new BadRequestException(

@@ -5,6 +5,8 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { FilesService } from './files.service';
 import { StorageService } from './storage/storage.service';
 import { AuditLogService } from '../audit/audit.service';
+import { GeminiService } from '../ai/services/gemini.service';
+import { AiService } from '../ai/ai.service';
 
 describe('FilesService', () => {
   let service: FilesService;
@@ -37,6 +39,16 @@ describe('FilesService', () => {
     logFileAction: jest.fn(),
   };
 
+  const mockGeminiService = {
+    generateEmbedding: jest.fn().mockResolvedValue(new Array(768).fill(0)),
+  };
+
+  const mockAiService = {
+    queueDocumentProcessingDirect: jest
+      .fn()
+      .mockResolvedValue({ jobId: 'mock-ai-job' }),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -56,6 +68,14 @@ describe('FilesService', () => {
         {
           provide: AuditLogService,
           useValue: mockAuditLogService,
+        },
+        {
+          provide: GeminiService,
+          useValue: mockGeminiService,
+        },
+        {
+          provide: AiService,
+          useValue: mockAiService,
         },
       ],
     }).compile();

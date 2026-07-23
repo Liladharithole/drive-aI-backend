@@ -64,7 +64,7 @@ export class GeminiService implements OnModuleInit {
   }
 
   /**
-   * Generate 768-dimension vector embedding for a text snippet using text-embedding-004.
+   * Generate 768-dimension vector embedding for a text snippet using gemini-embedding-001.
    */
   async generateEmbedding(text: string): Promise<number[]> {
     if (!this.ai) {
@@ -77,7 +77,7 @@ export class GeminiService implements OnModuleInit {
 
     try {
       const response = await this.ai.models.embedContent({
-        model: 'text-embedding-004',
+        model: 'gemini-embedding-001',
         contents: text,
       });
 
@@ -101,11 +101,11 @@ export class GeminiService implements OnModuleInit {
   }
 
   /**
-   * Generate LLM text completion using gemini-2.5-flash.
+   * Generate LLM text completion with model fallbacks to survive API 503/429 spikes.
    */
   async generateContent(
     prompt: string,
-    modelName = 'gemini-2.5-flash',
+    modelName = 'gemini-3.6-flash',
   ): Promise<string> {
     if (!this.ai) {
       this.logger.warn(
@@ -114,23 +114,41 @@ export class GeminiService implements OnModuleInit {
       return 'Mock Response: Please add a valid GEMINI_API_KEY to your .env file to enable live Gemini AI responses.';
     }
 
-    try {
-      const response = await this.ai.models.generateContent({
-        model: modelName,
-        contents: prompt,
-      });
+    const modelsToTry = [
+      modelName,
+      'gemini-3.5-flash-lite',
+      'gemini-1.5-flash',
+    ];
+    const uniqueModels = Array.from(new Set(modelsToTry));
+    let lastError: Error | null = null;
 
-      return response.text || '';
-    } catch (error) {
-      this.logger.error(
-        `Error generating text content via Gemini API: ${(error as Error).message}`,
-      );
-      throw error;
+    for (const model of uniqueModels) {
+      try {
+        this.logger.debug(`Attempting text generation with model: ${model}`);
+        const response = await this.ai.models.generateContent({
+          model: model,
+          contents: prompt,
+        });
+
+        return response.text || '';
+      } catch (error) {
+        this.logger.warn(
+          `Failed generating content with model ${model}: ${(error as Error).message}. Trying fallback...`,
+        );
+        lastError = error as Error;
+      }
     }
+
+    this.logger.error(
+      `All Gemini model generation attempts failed. Last error: ${lastError?.message}`,
+    );
+    throw (
+      lastError || new Error('All Gemini models failed to generate content')
+    );
   }
 
   /**
-   * Transcribe spoken audio buffer (.wav, .mp3, .webm, .m4a) to text using Gemini Multimodal Audio.
+   * Transcribe spoken audio buffer to text with model fallbacks.
    */
   async transcribeAudio(
     audioBuffer: Buffer,
@@ -143,28 +161,96 @@ export class GeminiService implements OnModuleInit {
       return 'What is the total price and payment terms?';
     }
 
-    try {
-      const base64Audio = audioBuffer.toString('base64');
-      const response = await this.ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: [
-          {
-            inlineData: {
-              mimeType: mimeType || 'audio/webm',
-              data: base64Audio,
-            },
-          },
-          'Transcribe what is spoken in this audio recording accurately into text. Return ONLY the exact transcribed spoken words with no extra conversational commentary or markdown formatting.',
-        ],
-      });
+    const base64Audio = audioBuffer.toString('base64');
+    const modelsToTry = [
+      'gemini-3.6-flash',
+      'gemini-3.5-flash-lite',
+      'gemini-1.5-flash',
+    ];
+    let lastError: Error | null = null;
 
-      return (response.text || '').trim();
-    } catch (error) {
-      this.logger.error(
-        `Error transcribing audio via Gemini API: ${(error as Error).message}`,
-      );
-      throw error;
+    for (const model of modelsToTry) {
+      try {
+        this.logger.debug(
+          `Attempting audio transcription with model: ${model}`,
+        );
+        const response = await this.ai.models.generateContent({
+          model: model,
+          contents: [
+            {
+              inlineData: {
+                mimeType: mimeType || 'audio/webm',
+                data: base64Audio,
+              },
+            },
+            'Transcribe what is spoken in this audio recording accurately into text. Return ONLY the exact transcribed spoken words with no extra conversational commentary or markdown formatting.',
+          ],
+        });
+
+        return (response.text || '').trim();
+      } catch (error) {
+        this.logger.warn(
+          `Failed audio transcription with model ${model}: ${(error as Error).message}. Trying fallback...`,
+        );
+        lastError = error as Error;
+      }
     }
+
+    this.logger.error(
+      `All Gemini model transcription attempts failed. Last error: ${lastError?.message}`,
+    );
+    throw (
+      lastError || new Error('All Gemini models failed to transcribe audio')
+    );
+  }
+
+  /**
+   * Generate content using multimodal parts (images, audio, text) with model fallbacks.
+   */
+  async generateContentMultimodal(
+    contents: any[],
+    modelName = 'gemini-3.6-flash',
+  ): Promise<string> {
+    if (!this.ai) {
+      this.logger.warn(
+        'Gemini API key not configured. Returning mock response.',
+      );
+      return 'Mock Image/Multimodal Response';
+    }
+
+    const modelsToTry = [
+      modelName,
+      'gemini-3.5-flash-lite',
+      'gemini-1.5-flash',
+    ];
+    let lastError: Error | null = null;
+
+    for (const model of modelsToTry) {
+      try {
+        this.logger.debug(
+          `Attempting multimodal generation with model: ${model}`,
+        );
+        const response = await this.ai.models.generateContent({
+          model: model,
+          contents: contents,
+        });
+
+        return response.text || '';
+      } catch (error) {
+        this.logger.warn(
+          `Failed multimodal generation with model ${model}: ${(error as Error).message}. Trying fallback...`,
+        );
+        lastError = error as Error;
+      }
+    }
+
+    this.logger.error(
+      `All Gemini models failed multimodal generation. Last error: ${lastError?.message}`,
+    );
+    throw (
+      lastError ||
+      new Error('All Gemini models failed to generate content from parts')
+    );
   }
 
   /**

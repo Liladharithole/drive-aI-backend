@@ -192,10 +192,10 @@ export class FilesController {
     description: 'Filter starred files',
   })
   @ApiQuery({
-    name: 'isTrashed',
+    name: 'search',
     required: false,
-    type: Boolean,
-    description: 'Filter trashed files',
+    type: String,
+    description: 'Natural language semantic search query',
   })
   @ApiResponse({ status: 200, description: 'Files retrieved successfully' })
   async getFiles(
@@ -203,6 +203,7 @@ export class FilesController {
     @Query('folderUuid') folderUuid?: string,
     @Query('isStarred') isStarred?: string,
     @Query('isTrashed') isTrashed?: string,
+    @Query('search') search?: string,
   ) {
     const starredBool =
       isStarred !== undefined ? isStarred === 'true' : undefined;
@@ -214,6 +215,8 @@ export class FilesController {
       folderUuid,
       starredBool,
       trashedBool,
+      'Asia/Kolkata', // fallback timezone
+      search,
     );
 
     return {

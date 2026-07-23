@@ -12,6 +12,7 @@ import {
   UploadedFile,
   UseGuards,
   UseInterceptors,
+  Delete,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
@@ -200,5 +201,93 @@ export class AiController {
       fileUuid,
       timezone || 'Asia/Kolkata',
     );
+  }
+
+  @ApiOperation({
+    summary:
+      'Ask a natural language question across all user files (Global RAG)',
+  })
+  @ApiResponse({ status: 200, description: 'Grounding answer returned' })
+  @Post('chat')
+  @HttpCode(HttpStatus.OK)
+  async askGlobalQuestion(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body('question') question: string,
+    @Body('sessionUuid') sessionUuid?: string,
+  ) {
+    if (!question) {
+      throw new BadRequestException('Question is required');
+    }
+    return this.aiService.askGlobalQuestion(
+      user.uuid,
+      user.email,
+      question,
+      sessionUuid,
+    );
+  }
+
+  @ApiOperation({ summary: 'List all chat sessions for the current user' })
+  @ApiResponse({ status: 200, description: 'List of chat sessions returned' })
+  @Get('sessions')
+  async getSessions(@CurrentUser() user: AuthenticatedUser) {
+    return this.aiService.getSessions(user.uuid);
+  }
+
+  @ApiOperation({ summary: 'Get all messages inside a specific chat session' })
+  @ApiResponse({ status: 200, description: 'Messages list returned' })
+  @Get('sessions/:uuid/messages')
+  async getSessionMessages(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('uuid') uuid: string,
+  ) {
+    return this.aiService.getSessionMessages(user.uuid, uuid);
+  }
+
+  @ApiOperation({ summary: 'Delete a chat session and its message logs' })
+  @ApiResponse({ status: 200, description: 'Session deleted successfully' })
+  @Delete('sessions/:uuid')
+  async deleteSession(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('uuid') uuid: string,
+  ) {
+    return this.aiService.deleteSession(user.uuid, uuid);
+  }
+
+  @ApiOperation({
+    summary: 'Transcribe spoken audio recording to text',
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        audio: {
+          type: 'string',
+          format: 'binary',
+          description: 'Spoken audio clip (.mp3, .wav, .webm, .m4a)',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Audio transcribed successfully',
+  })
+  @Post('transcribe')
+  @UseInterceptors(FileInterceptor('audio'))
+  @HttpCode(HttpStatus.OK)
+  async transcribeAudio(
+    @CurrentUser() user: AuthenticatedUser,
+    @UploadedFile() file: ExpressFile,
+  ) {
+    if (!file || !file.buffer) {
+      throw new BadRequestException('Audio file recording is required');
+    }
+
+    const text = await this.aiService.transcribeAudioDirect(
+      file.buffer,
+      file.mimetype || 'audio/webm',
+    );
+    return { success: true, text };
   }
 }

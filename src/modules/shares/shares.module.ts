@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { PrismaCentralCoreModule } from '../../prisma-central-core/prisma-central-core.module';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { ProductsModule } from '../products/products.module';
@@ -12,7 +12,7 @@ import { SharesService } from './shares.service';
     PrismaModule,
     PrismaCentralCoreModule,
     ProductsModule,
-    FilesModule,
+    forwardRef(() => FilesModule),
     AuditModule,
   ],
   controllers: [SharesController],

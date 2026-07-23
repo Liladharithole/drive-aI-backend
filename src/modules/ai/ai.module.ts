@@ -1,5 +1,5 @@
 import { BullModule } from '@nestjs/bullmq';
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { SharesModule } from '../shares/shares.module';
 import { FilesModule } from '../files/files.module';
@@ -15,7 +15,7 @@ import { DocumentExporterService } from './services/document-exporter.service';
   imports: [
     PrismaModule,
     SharesModule,
-    FilesModule,
+    forwardRef(() => FilesModule),
     BullModule.registerQueue({
       name: 'ai-document-processing',
     }),
@@ -29,6 +29,6 @@ import { DocumentExporterService } from './services/document-exporter.service';
     DocumentExporterService,
     AiDocumentProcessor,
   ],
-  exports: [AiService, DocumentExporterService],
+  exports: [AiService, DocumentExporterService, GeminiService],
 })
 export class AiModule {}

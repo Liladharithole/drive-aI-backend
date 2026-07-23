@@ -15,6 +15,10 @@ describe('AiService', () => {
   const mockPrismaService = {
     file: {
       findFirst: jest.fn(),
+      findMany: jest.fn(),
+    },
+    fileShare: {
+      findMany: jest.fn(),
     },
     fileAiSummary: {
       findUnique: jest.fn(),
@@ -23,6 +27,17 @@ describe('AiService', () => {
       findMany: jest.fn(),
     },
     aiChatHistory: {
+      create: jest.fn(),
+      findMany: jest.fn(),
+    },
+    chatSession: {
+      findFirst: jest.fn(),
+      findMany: jest.fn(),
+      create: jest.fn(),
+      update: jest.fn(),
+      delete: jest.fn(),
+    },
+    chatMessage: {
       create: jest.fn(),
       findMany: jest.fn(),
     },
@@ -250,6 +265,81 @@ describe('AiService', () => {
       expect(result.success).toBe(true);
       expect(result.translatedFileName).toBe('Contract_Hindi.pdf');
       expect(result.translatedFile.uuid).toBe('translated-file-1');
+    });
+  });
+
+  describe('getSessions', () => {
+    it('should query prisma and return chat sessions list', async () => {
+      mockPrismaService.chatSession.findMany.mockResolvedValue([
+        {
+          uuid: 'session-1',
+          title: 'Hello Chat',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ]);
+
+      const result = await service.getSessions('user-1');
+      expect(result.length).toBe(1);
+      expect(result[0].uuid).toBe('session-1');
+    });
+  });
+
+  describe('getSessionMessages', () => {
+    it('should query messages for a session and map them', async () => {
+      mockPrismaService.chatSession.findFirst.mockResolvedValue({
+        uuid: 'session-1',
+        userUuid: 'user-1',
+      });
+      mockPrismaService.chatMessage.findMany.mockResolvedValue([
+        {
+          uuid: 'msg-1',
+          sender: 'user',
+          text: 'Hi',
+          citations: null,
+        },
+      ]);
+
+      const result = await service.getSessionMessages('user-1', 'session-1');
+      expect(result.length).toBe(1);
+      expect(result[0].id).toBe('msg-1');
+    });
+
+    it('should throw NotFoundException if session does not exist or belong to user', async () => {
+      mockPrismaService.chatSession.findFirst.mockResolvedValue(null);
+      await expect(
+        service.getSessionMessages('user-1', 'session-1'),
+      ).rejects.toThrow();
+    });
+  });
+
+  describe('deleteSession', () => {
+    it('should delete a session and return success', async () => {
+      mockPrismaService.chatSession.findFirst.mockResolvedValue({
+        uuid: 'session-1',
+        userUuid: 'user-1',
+      });
+      mockPrismaService.chatSession.delete.mockResolvedValue({
+        uuid: 'session-1',
+      });
+
+      const result = await service.deleteSession('user-1', 'session-1');
+      expect(result.success).toBe(true);
+    });
+  });
+
+  describe('transcribeAudioDirect', () => {
+    it('should call transcribeAudio in geminiService', async () => {
+      mockGeminiService.transcribeAudio.mockResolvedValue('Mock Speech Text');
+      const result = await service.transcribeAudioDirect(
+        Buffer.from('audio'),
+        'audio/webm',
+      );
+      expect(result).toBe('Mock Speech Text');
+      expect(mockGeminiService.transcribeAudio).toHaveBeenCalledWith(
+        expect.any(Buffer),
+        'audio/webm',
+      );
     });
   });
 });

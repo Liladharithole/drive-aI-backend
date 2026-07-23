@@ -1,12 +1,26 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { TextExtractorService } from './text-extractor.service';
+import { GeminiService } from './gemini.service';
 
 describe('TextExtractorService', () => {
   let service: TextExtractorService;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
-      providers: [TextExtractorService],
+      providers: [
+        TextExtractorService,
+        {
+          provide: GeminiService,
+          useValue: {
+            generateContentMultimodal: jest
+              .fn()
+              .mockResolvedValue('Mock Extracted Text from Image or Video'),
+            transcribeAudio: jest
+              .fn()
+              .mockResolvedValue('Mock Transcribed Audio'),
+          },
+        },
+      ],
     }).compile();
 
     service = module.get<TextExtractorService>(TextExtractorService);
@@ -35,6 +49,20 @@ describe('TextExtractorService', () => {
       const text = await service.extractText(buffer, 'text/plain', 'txt');
 
       expect(text).toBe('Hello world plain text');
+    });
+
+    it('should extract transcription from audio files', async () => {
+      const buffer = Buffer.from('mock-audio-data');
+      const text = await service.extractText(buffer, 'audio/mp3', 'mp3');
+
+      expect(text).toBe('Mock Transcribed Audio');
+    });
+
+    it('should extract details and transcription from video files', async () => {
+      const buffer = Buffer.from('mock-video-data');
+      const text = await service.extractText(buffer, 'video/mp4', 'mp4');
+
+      expect(text).toBe('Mock Extracted Text from Image or Video');
     });
   });
 });
