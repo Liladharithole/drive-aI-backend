@@ -214,6 +214,7 @@ export class AiController {
     @CurrentUser() user: AuthenticatedUser,
     @Body('question') question: string,
     @Body('sessionUuid') sessionUuid?: string,
+    @Body('fileUuid') fileUuid?: string,
   ) {
     if (!question) {
       throw new BadRequestException('Question is required');
@@ -223,6 +224,7 @@ export class AiController {
       user.email,
       question,
       sessionUuid,
+      fileUuid,
     );
   }
 

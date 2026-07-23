@@ -515,6 +515,7 @@ Instructions:
     userEmail: string,
     question: string,
     sessionUuid?: string,
+    fileUuid?: string,
   ) {
     if (!question || question.trim().length === 0) {
       throw new BadRequestException('Question cannot be empty');
@@ -566,7 +567,10 @@ Instructions:
         : [];
 
     // 3. Combine files
-    const allFiles = [...userFiles, ...sharedFiles];
+    let allFiles = [...userFiles, ...sharedFiles];
+    if (fileUuid) {
+      allFiles = allFiles.filter((f) => f.uuid === fileUuid);
+    }
     const fileUuids = allFiles.map((f) => f.uuid);
 
     let contextText = '(No document context available)';

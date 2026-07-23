@@ -48,14 +48,35 @@ export class TextExtractorService {
       // 1. PDF Files
       if (normalizedExt === 'pdf' || normalizedMime.includes('pdf')) {
         this.logger.debug('Extracting text from PDF buffer...');
-        const pdfData = await parsePdf(buffer);
-        const text = pdfData.text ? pdfData.text.trim() : '';
-        if (!text) {
-          throw new BadRequestException(
-            'PDF file contains no readable text (it may be scanned images)',
+        let text = '';
+        try {
+          const pdfData = await parsePdf(buffer);
+          text = pdfData.text ? pdfData.text.trim() : '';
+        } catch (err) {
+          this.logger.warn(
+            `Local PDF parser failed, falling back to Gemini OCR: ${(err as Error).message}`,
           );
         }
-        return text;
+
+        if (text) {
+          return text;
+        }
+
+        // Fallback: Use Gemini Multimodal OCR
+        this.logger.debug(
+          'PDF contains no direct text or parsing failed. Extracting via Gemini Multimodal OCR...',
+        );
+        const base64Pdf = buffer.toString('base64');
+        const ocrPrompt = [
+          {
+            inlineData: {
+              mimeType: 'application/pdf',
+              data: base64Pdf,
+            },
+          },
+          'Extract and transcribe all text from this PDF document page by page. If there are tables, preserve their structural contents. Return only the extracted text.',
+        ];
+        return await this.geminiService.generateContentMultimodal(ocrPrompt);
       }
 
       // 2. Word Files (.docx)
@@ -66,14 +87,33 @@ export class TextExtractorService {
         normalizedMime.includes('msword')
       ) {
         this.logger.debug('Extracting text from DOCX buffer via Mammoth...');
-        const result = await mammoth.extractRawText({ buffer });
-        const text = result.value ? result.value.trim() : '';
-        if (!text) {
+        let text = '';
+        let isOldDocFormat = false;
+
+        try {
+          const result = await mammoth.extractRawText({ buffer });
+          text = result.value ? result.value.trim() : '';
+        } catch (err) {
+          const msg = (err as Error).message;
+          this.logger.warn(`Mammoth parser failed: ${msg}`);
+          if (msg.includes('signature') || normalizedExt === 'doc') {
+            isOldDocFormat = true;
+          }
+        }
+
+        if (text) {
+          return text;
+        }
+
+        if (isOldDocFormat) {
           throw new BadRequestException(
-            'Word document contains no readable text',
+            'The older Word document (.doc) format is not supported directly. Please save/convert it to .docx format first.',
           );
         }
-        return text;
+
+        throw new BadRequestException(
+          'The Word document contains no readable text content.',
+        );
       }
 
       // 3. Plain Text, Markdown, JSON, CSV, Code files
