@@ -33,15 +33,21 @@ export class GeminiService implements OnModuleInit {
   private readonly logger = new Logger(GeminiService.name);
   private ai: GeminiAiClient | null = null;
 
+  /* eslint-disable @typescript-eslint/no-implied-eval, @typescript-eslint/no-unsafe-call */
   async onModuleInit() {
     const apiKey = process.env.GEMINI_API_KEY;
-    if (apiKey && apiKey !== 'your-gemini-api-key-here') {
+    if (
+      apiKey &&
+      apiKey.trim().length > 0 &&
+      apiKey !== 'your-gemini-api-key-here'
+    ) {
       try {
-        const { GoogleGenAI } = await (eval(
-          'import("@google/genai")',
-        ) as Promise<{
+        const genAiModule = (await Function(
+          'return import("@google/genai")',
+        )()) as {
           GoogleGenAI: new (opts: { apiKey: string }) => GeminiAiClient;
-        }>);
+        };
+        const GoogleGenAI = genAiModule.GoogleGenAI;
         this.ai = new GoogleGenAI({ apiKey });
         this.logger.log('Gemini API client initialized successfully');
       } catch (error) {
@@ -51,10 +57,11 @@ export class GeminiService implements OnModuleInit {
       }
     } else {
       this.logger.warn(
-        'GEMINI_API_KEY is missing or unconfigured in .env. AI capabilities will run in mock mode until configured.',
+        `GEMINI_API_KEY is missing or unconfigured (key presence: ${Boolean(apiKey)}). AI capabilities will run in mock mode.`,
       );
     }
   }
+  /* eslint-enable @typescript-eslint/no-implied-eval, @typescript-eslint/no-unsafe-call */
 
   /**
    * Check if Gemini API client is active and configured.

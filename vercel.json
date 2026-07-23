@@ -8,6 +8,7 @@
         "includeFiles": [
           "node_modules/@prisma/client-central-core/**",
           "node_modules/@prisma/client/**",
+          "node_modules/@google/genai/**",
           "prisma/**"
         ]
       }
