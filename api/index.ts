@@ -47,7 +47,7 @@ async function bootstrapServerless() {
   }
 }
 
-export default async function handler(req: unknown, res: unknown) {
+export default async function handler(req: any, res: any) {
   await bootstrapServerless();
-  server(req, res as Parameters<typeof server>[1]);
+  server(req, res);
 }

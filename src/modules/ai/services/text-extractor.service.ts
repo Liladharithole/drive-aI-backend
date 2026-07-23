@@ -28,11 +28,14 @@ interface PdfParseResult {
   text: string;
 }
 
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call */
 const parsePdf = async (buffer: Buffer): Promise<PdfParseResult> => {
   try {
     // Dynamic import to prevent top-level bundle failures in Serverless (e.g. Vercel)
-    const pdfModule = await import('pdf-parse');
-    const PDFParse = pdfModule.PDFParse || pdfModule.default || pdfModule;
+    const pdfModule = (await import('pdf-parse')) as Record<string, unknown>;
+    const PDFParse = (pdfModule.PDFParse ||
+      pdfModule.default ||
+      pdfModule) as any;
     const parser = new PDFParse({ data: buffer });
     try {
       const result = await parser.getText();
@@ -47,6 +50,7 @@ const parsePdf = async (buffer: Buffer): Promise<PdfParseResult> => {
     return { text: '' };
   }
 };
+/* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call */
 
 @Injectable()
 export class TextExtractorService {
