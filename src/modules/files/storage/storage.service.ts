@@ -9,6 +9,8 @@ import { existsSync, mkdirSync } from 'node:fs';
 import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
+import { tmpdir } from 'node:os';
+
 export interface StorageUploadResult {
   storageDriver: string;
   storageKey: string;
@@ -19,14 +21,20 @@ export interface StorageUploadResult {
 export class StorageService {
   private readonly logger = new Logger(StorageService.name);
   private readonly storageDriver = process.env.STORAGE_DRIVER || 'local';
-  private readonly uploadDir = join(process.cwd(), 'uploads');
+  private readonly uploadDir = join(tmpdir(), 'uploads');
   private s3Client: S3Client | null = null;
   private s3Bucket: string | null = null;
 
   constructor() {
     if (this.storageDriver === 'local') {
-      if (!existsSync(this.uploadDir)) {
-        mkdirSync(this.uploadDir, { recursive: true });
+      try {
+        if (!existsSync(this.uploadDir)) {
+          mkdirSync(this.uploadDir, { recursive: true });
+        }
+      } catch (err) {
+        this.logger.warn(
+          `Failed to create upload directory "${this.uploadDir}": ${(err as Error).message}`,
+        );
       }
     } else if (this.storageDriver === 's3') {
       const region = process.env.AWS_REGION || 'auto';

@@ -27,6 +27,8 @@ import { AuditLogService } from '../audit/audit.service';
 import { GeminiService } from '../ai/services/gemini.service';
 import { AiService } from '../ai/ai.service';
 
+import { tmpdir } from 'node:os';
+
 export interface FormattedFile {
   id: string;
   uuid: string;
@@ -50,7 +52,7 @@ export interface FormattedFile {
 @Injectable()
 export class FilesService {
   private readonly logger = new Logger(FilesService.name);
-  private readonly tempUploadDir = join(process.cwd(), 'uploads', 'temp');
+  private readonly tempUploadDir = join(tmpdir(), 'uploads', 'temp');
 
   constructor(
     private readonly prisma: PrismaService,
@@ -62,8 +64,14 @@ export class FilesService {
     @Inject(forwardRef(() => AiService))
     private readonly aiService: AiService,
   ) {
-    if (!existsSync(this.tempUploadDir)) {
-      mkdirSync(this.tempUploadDir, { recursive: true });
+    try {
+      if (!existsSync(this.tempUploadDir)) {
+        mkdirSync(this.tempUploadDir, { recursive: true });
+      }
+    } catch (err) {
+      this.logger.warn(
+        `Failed to create temp upload directory "${this.tempUploadDir}": ${(err as Error).message}`,
+      );
     }
   }
 

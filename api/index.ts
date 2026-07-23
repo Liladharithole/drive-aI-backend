@@ -52,13 +52,19 @@ async function bootstrapServerless() {
 export default async function handler(req: Request, res: Response) {
   try {
     await bootstrapServerless();
-    server(req, res);
-  } catch (error) {
-    console.error('Serverless Bootstrap Error:', error);
-    res.status(500).json({
-      statusCode: 500,
-      message: 'Internal Serverless Invocation Error',
-      error: String((error as Error)?.message || error),
+    await new Promise<void>((resolve, reject) => {
+      res.on('finish', resolve);
+      res.on('error', reject);
+      server(req, res);
     });
+  } catch (error) {
+    console.error('Serverless Invocation Error:', error);
+    if (!res.headersSent) {
+      res.status(500).json({
+        statusCode: 500,
+        message: 'Internal Serverless Invocation Error',
+        error: String((error as Error)?.message || error),
+      });
+    }
   }
 }
