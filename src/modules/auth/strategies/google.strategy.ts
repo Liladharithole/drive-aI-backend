@@ -12,7 +12,7 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
         process.env.GOOGLE_CLIENT_SECRET || 'mock-google-client-secret',
       callbackURL:
         process.env.GOOGLE_CALLBACK_URL ||
-        'http://localhost:7001/auth/google/callback',
+        'https://p-1-l1rshrkvz-liladhar-s-projects.vercel.app/auth/google/callback',
       scope: ['email', 'profile'],
     });
   }
