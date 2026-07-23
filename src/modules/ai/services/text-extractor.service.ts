@@ -1,7 +1,22 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import * as mammoth from 'mammoth';
-import { PDFParse } from 'pdf-parse';
 import { GeminiService } from './gemini.service';
+
+// Polyfill DOMMatrix for Node.js / Vercel Serverless environments where browser DOM is absent
+const globalObject = globalThis as unknown as Record<string, unknown>;
+if (typeof globalObject.DOMMatrix === 'undefined') {
+  globalObject.DOMMatrix = class DOMMatrix {
+    a = 1;
+    b = 0;
+    c = 0;
+    d = 1;
+    e = 0;
+    f = 0;
+    matrixTransform() {
+      return {};
+    }
+  };
+}
 
 export interface DocumentChunk {
   chunkIndex: number;
@@ -14,12 +29,22 @@ interface PdfParseResult {
 }
 
 const parsePdf = async (buffer: Buffer): Promise<PdfParseResult> => {
-  const parser = new PDFParse({ data: buffer });
   try {
-    const result = await parser.getText();
-    return { text: result.text || '' };
-  } finally {
-    await parser.destroy();
+    // Dynamic import to prevent top-level bundle failures in Serverless (e.g. Vercel)
+    const pdfModule = await import('pdf-parse');
+    const PDFParse = pdfModule.PDFParse || pdfModule.default || pdfModule;
+    const parser = new PDFParse({ data: buffer });
+    try {
+      const result = await parser.getText();
+      return { text: result.text || '' };
+    } finally {
+      if (parser && typeof parser.destroy === 'function') {
+        await parser.destroy();
+      }
+    }
+  } catch {
+    // Return empty string so TextExtractorService falls back to Gemini Multimodal OCR
+    return { text: '' };
   }
 };
 
