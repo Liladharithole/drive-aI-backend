@@ -4,8 +4,14 @@ import { NestFactory } from '@nestjs/core';
 import { ExpressAdapter } from '@nestjs/platform-express';
 import express, { Express, Request, Response } from 'express';
 import { Logger as PinoLogger } from 'nestjs-pino';
-import { AppModule } from '../src/app.module';
 import { AllExceptionsFilter } from '../src/common/filters/all-exceptions.filter';
+import { AppModule } from '../src/app.module';
+// Ensure Vercel bundler (@vercel/nft) traces @google/genai into the serverless bundle
+try {
+  require.resolve('@google/genai');
+} catch {
+  // Ignored if module resolution is skipped
+}
 
 const server: Express = express();
 let appInitPromise: Promise<void> | null = null;

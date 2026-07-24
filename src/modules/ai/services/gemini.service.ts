@@ -32,6 +32,7 @@ interface GeminiAiClient {
 export class GeminiService implements OnModuleInit {
   private readonly logger = new Logger(GeminiService.name);
   private ai: GeminiAiClient | null = null;
+  private initError: string | null = null;
 
   /* eslint-disable @typescript-eslint/no-implied-eval, @typescript-eslint/no-unsafe-call */
   private async getAiClient(): Promise<GeminiAiClient | null> {
@@ -54,10 +55,12 @@ export class GeminiService implements OnModuleInit {
         const GoogleGenAI = genAiModule.GoogleGenAI;
         this.ai = new GoogleGenAI({ apiKey: apiKey.trim() });
         this.logger.log('Gemini API client initialized successfully');
+        this.initError = null;
         return this.ai;
       } catch (error) {
+        this.initError = (error as Error).message;
         this.logger.error(
-          `Failed to initialize GoogleGenAI module: ${(error as Error).message}`,
+          `Failed to initialize GoogleGenAI module: ${this.initError}`,
         );
       }
     } else {
@@ -87,7 +90,7 @@ export class GeminiService implements OnModuleInit {
     const ai = await this.getAiClient();
     if (!ai) {
       this.logger.warn(
-        'Gemini API key not configured. Generating deterministic fallback mock vector.',
+        `Gemini API key not configured (init error: ${this.initError || 'none'}). Generating deterministic fallback mock vector.`,
       );
       // Return 768-dimension mock vector for development/offline testing
       return new Array(768).fill(0).map((_, i) => Math.sin(i + text.length));
@@ -123,23 +126,23 @@ export class GeminiService implements OnModuleInit {
    */
   async generateContent(
     prompt: string,
-    modelName = 'gemini-2.5-flash',
+    modelName = 'gemini-flash-latest',
   ): Promise<string> {
     const ai = await this.getAiClient();
     if (!ai) {
       const rawKey = process.env.GEMINI_API_KEY;
       const keyStatus = !rawKey
-        ? 'GEMINI_API_KEY is UNDEFINED on Vercel Serverless environment.'
-        : `GEMINI_API_KEY present (length: ${rawKey.length}, startsWith: ${rawKey.trim().slice(0, 6)}...).`;
+        ? 'GEMINI_API_KEY is UNDEFINED on Vercel.'
+        : `GEMINI_API_KEY present (length: ${rawKey.length}). ${this.initError ? `Load error: ${this.initError}` : 'Invalid API Key format or auth failure.'}`;
       this.logger.warn(`Gemini API key unconfigured: ${keyStatus}`);
       return `Mock Response: Please add a valid GEMINI_API_KEY to your Vercel Environment Variables. (${keyStatus})`;
     }
 
     const modelsToTry = [
       modelName,
+      'gemini-3.5-flash',
+      'gemini-flash-lite-latest',
       'gemini-2.0-flash',
-      'gemini-1.5-flash',
-      'gemini-1.5-pro',
     ];
     const uniqueModels = Array.from(new Set(modelsToTry));
     let lastError: Error | null = null;
@@ -186,9 +189,9 @@ export class GeminiService implements OnModuleInit {
 
     const base64Audio = audioBuffer.toString('base64');
     const modelsToTry = [
-      'gemini-2.5-flash',
-      'gemini-2.0-flash',
-      'gemini-1.5-flash',
+      'gemini-flash-latest',
+      'gemini-3.5-flash',
+      'gemini-flash-lite-latest',
     ];
     let lastError: Error | null = null;
 
@@ -232,7 +235,7 @@ export class GeminiService implements OnModuleInit {
    */
   async generateContentMultimodal(
     contents: any[],
-    modelName = 'gemini-2.5-flash',
+    modelName = 'gemini-flash-latest',
   ): Promise<string> {
     const ai = await this.getAiClient();
     if (!ai) {
@@ -242,7 +245,11 @@ export class GeminiService implements OnModuleInit {
       return 'Mock Image/Multimodal Response';
     }
 
-    const modelsToTry = [modelName, 'gemini-2.0-flash', 'gemini-1.5-flash'];
+    const modelsToTry = [
+      modelName,
+      'gemini-3.5-flash',
+      'gemini-flash-lite-latest',
+    ];
     let lastError: Error | null = null;
 
     for (const model of modelsToTry) {
