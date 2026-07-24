@@ -177,6 +177,7 @@ export class FilesService {
       'process-file',
       {
         tempPath,
+        fileBufferBase64: fileBuffer.toString('base64'),
         originalName: originalName.trim(),
         mimeType,
         userUuid,

@@ -6,7 +6,8 @@ import { readFile, unlink } from 'node:fs/promises';
 import { FilesService } from '../files.service';
 
 export interface FileUploadJobData {
-  tempPath: string;
+  tempPath?: string;
+  fileBufferBase64?: string;
   originalName: string;
   mimeType: string;
   userUuid: string;
@@ -25,6 +26,7 @@ export class FileUploadProcessor extends WorkerHost {
   async process(job: Job<FileUploadJobData>): Promise<any> {
     const {
       tempPath,
+      fileBufferBase64,
       originalName,
       mimeType,
       userUuid,
@@ -36,16 +38,24 @@ export class FileUploadProcessor extends WorkerHost {
       `Processing file upload job ${job.id} for: ${originalName}`,
     );
 
-    if (!existsSync(tempPath)) {
-      this.logger.error(`Temporary upload file not found: ${tempPath}`);
+    let buffer: Buffer | null = null;
+
+    if (tempPath && existsSync(tempPath)) {
+      buffer = await readFile(tempPath);
+    } else if (fileBufferBase64) {
+      this.logger.log(
+        `Reading file buffer from Redis payload for: ${originalName}`,
+      );
+      buffer = Buffer.from(fileBufferBase64, 'base64');
+    }
+
+    if (!buffer) {
+      this.logger.error(`Temporary upload file not found: ${originalName}`);
       throw new Error(`Temporary file not found: ${originalName}`);
     }
 
     try {
-      // 1. Read file buffer from temp disk
-      const buffer = await readFile(tempPath);
-
-      // 2. Upload file through final database & storage driver pipeline
+      // 1. Upload file through final database & storage driver pipeline
       const uploadedFile = await this.filesService.uploadFile(
         userUuid,
         buffer,
@@ -65,8 +75,8 @@ export class FileUploadProcessor extends WorkerHost {
       this.logger.error(`Failed to process upload job ${job.id}: ${errMsg}`);
       throw err;
     } finally {
-      // 3. Clean up temporary file from disk in all cases
-      if (existsSync(tempPath)) {
+      // 2. Clean up temporary file from disk if present
+      if (tempPath && existsSync(tempPath)) {
         await unlink(tempPath);
         this.logger.log(`Cleaned up temporary file: ${tempPath}`);
       }
