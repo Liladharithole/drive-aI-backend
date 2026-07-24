@@ -123,20 +123,23 @@ export class GeminiService implements OnModuleInit {
    */
   async generateContent(
     prompt: string,
-    modelName = 'gemini-3.6-flash',
+    modelName = 'gemini-2.5-flash',
   ): Promise<string> {
     const ai = await this.getAiClient();
     if (!ai) {
-      this.logger.warn(
-        'Gemini API key not configured. Returning mock response.',
-      );
-      return 'Mock Response: Please add a valid GEMINI_API_KEY to your .env file to enable live Gemini AI responses.';
+      const rawKey = process.env.GEMINI_API_KEY;
+      const keyStatus = !rawKey
+        ? 'GEMINI_API_KEY is UNDEFINED on Vercel Serverless environment.'
+        : `GEMINI_API_KEY present (length: ${rawKey.length}, startsWith: ${rawKey.trim().slice(0, 6)}...).`;
+      this.logger.warn(`Gemini API key unconfigured: ${keyStatus}`);
+      return `Mock Response: Please add a valid GEMINI_API_KEY to your Vercel Environment Variables. (${keyStatus})`;
     }
 
     const modelsToTry = [
       modelName,
-      'gemini-3.5-flash-lite',
+      'gemini-2.0-flash',
       'gemini-1.5-flash',
+      'gemini-1.5-pro',
     ];
     const uniqueModels = Array.from(new Set(modelsToTry));
     let lastError: Error | null = null;
@@ -183,8 +186,8 @@ export class GeminiService implements OnModuleInit {
 
     const base64Audio = audioBuffer.toString('base64');
     const modelsToTry = [
-      'gemini-3.6-flash',
-      'gemini-3.5-flash-lite',
+      'gemini-2.5-flash',
+      'gemini-2.0-flash',
       'gemini-1.5-flash',
     ];
     let lastError: Error | null = null;
@@ -229,7 +232,7 @@ export class GeminiService implements OnModuleInit {
    */
   async generateContentMultimodal(
     contents: any[],
-    modelName = 'gemini-3.6-flash',
+    modelName = 'gemini-2.5-flash',
   ): Promise<string> {
     const ai = await this.getAiClient();
     if (!ai) {
@@ -239,11 +242,7 @@ export class GeminiService implements OnModuleInit {
       return 'Mock Image/Multimodal Response';
     }
 
-    const modelsToTry = [
-      modelName,
-      'gemini-3.5-flash-lite',
-      'gemini-1.5-flash',
-    ];
+    const modelsToTry = [modelName, 'gemini-2.0-flash', 'gemini-1.5-flash'];
     let lastError: Error | null = null;
 
     for (const model of modelsToTry) {
