@@ -10,7 +10,7 @@
     "prebuild": "prisma generate --config prisma.config.ts && prisma generate --config prisma-central-core.config.ts",
     "db:migrate": "prisma migrate dev --config prisma.config.ts",
     "db:migrate:central-core": "prisma migrate dev --config prisma-central-core.config.ts",
-    "build": "nest build",
+    "build": "prisma generate && prisma migrate deploy && nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
     "start:dev": "nest start --watch",
