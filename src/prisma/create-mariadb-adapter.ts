@@ -14,5 +14,6 @@ export function createMariaDbAdapter(
     password: decodeURIComponent(url.password),
     database,
     connectionLimit,
+    allowPublicKeyRetrieval: true,
   });
 }
